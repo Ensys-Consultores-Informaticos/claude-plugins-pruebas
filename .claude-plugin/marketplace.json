@@ -1,0 +1,19 @@
+{
+  "name": "ensys-pruebas",
+  "owner": {
+    "name": "Ensys Consultores Informáticos, S.L.",
+    "url": "https://github.com/Ensys-Consultores-Informaticos"
+  },
+  "description": "CANAL DE PRUEBAS de los plugins de auditoría de Ensys Consultores. Versiones beta antes de pasar al marketplace 'ensys'. No instalar en producción.",
+  "plugins": [
+    {
+      "name": "gesia-auditoria",
+      "source": "./plugins/gesia-auditoria",
+      "description": "PRUEBAS. Procedimientos de auditoría sobre el expediente de Gesia: cuadro de mando del diario contable, revisión del contenido de la memoria, prueba de continuidad de saldos de apertura, cancelación de saldos (facturas contra pagos y cobros), identificación de riesgos (NIA-ES 315) investigación de la entidad auditada en fuentes públicas, y lectura del cliente de muestreo de ForSampling con validación de la prueba de cumplimiento contra las facturas escaneadas. Incluye el servidor MCP que lee el expediente y un registro de ejecución anónimo para reportar incidencias. Requiere Windows y Gesia instalado.",
+      "author": {
+        "name": "Ensys Consultores Informáticos, S.L."
+      },
+      "homepage": "https://github.com/Ensys-Consultores-Informaticos/claude-plugins-pruebas"
+    }
+  ]
+}

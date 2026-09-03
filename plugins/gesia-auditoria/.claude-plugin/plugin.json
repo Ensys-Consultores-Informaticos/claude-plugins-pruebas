@@ -1,0 +1,18 @@
+{
+  "name": "gesia-auditoria",
+  "displayName": "Gesia — Expediente de auditoría (PRUEBAS)",
+  "version": "1.8.2",
+  "description": "CANAL DE PRUEBAS, no para clientes. Procedimientos de auditoría sobre el expediente de Gesia: cuadro de mando del diario, revisión del contenido de la memoria, continuidad de saldos de apertura, cancelación de saldos (facturas contra pagos), identificación de riesgos, investigación de la entidad en fuentes públicas, y lectura del cliente de muestreo de ForSampling (.cli): pruebas, muestra seleccionada y evaluación del auditor, y validación de la muestra de una prueba de cumplimiento o de una MUM contra las facturas escaneadas, que lee el propio modelo o, cuando hay subagentes, el agente lector por lotes en paralelo. Incluye el servidor MCP de Gesia y un registro de ejecución anónimo para reportar incidencias. Requiere Windows. (PRUEBAS · MCP 1.9.3) (v1.8.2)",
+  "author": {
+    "name": "Ensys Consultores Informáticos, S.L."
+  },
+  "license": "Propietario",
+  "keywords": [
+    "gesia",
+    "auditoria",
+    "contabilidad",
+    "ensys",
+    "diario"
+  ],
+  "homepage": "https://github.com/Ensys-Consultores-Informaticos/claude-plugins-pruebas"
+}
