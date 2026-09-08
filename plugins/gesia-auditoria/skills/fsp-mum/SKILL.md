@@ -210,10 +210,14 @@ documentos**, no al final:
 ```json
 {"facturas": [
   {"fichero": "20260226142827850.pdf", "proveedor": "Inmobiliaria X, S.L.", "cif": "B00000000",
-   "numero": "A-2025-118", "fecha": "13/03/2025", "base": "12500,00", "pct_iva": "21",
+   "numero": "A-2025-118", "fecha": "13/03/2025", "concepto": "Arrendamiento local, marzo",
+   "base": "12500,00", "pct_iva": "21",
    "iva": "2625,00", "irpf": "", "total": "15125,00", "paginas": 1, "notas": ""}
 ]}
 ```
+
+`concepto` es de qué es la factura, en una línea y con las palabras del documento: no entra
+en el cruce, solo describe la fila del papel.
 
 **En una MUM la base y el total pesan igual**: el término de comparación se decide después,
 así que hay que leer los dos siempre que estén. Si uno no se lee, déjalo vacío y dilo en
@@ -269,11 +273,19 @@ PAPEL="MUM <PRUEBA> <CLIENTE> <EJERCICIO>.xlsx"
 python "$SKILL/scripts/ejecutar_mum.py" \
     --muestra "$DATOS/muestra.json" --parametros "$DATOS/parametros.json" \
     --facturas "$DATOS/facturas.json" --evaluacion "$DATOS/evaluacion.json" \
+    --manifiesto "$DATOS/manifiesto.json" \
     --salida "$TRABAJO/$PAPEL" --generado "<AAAA-MM-DD, la fecha que te dé el usuario>"
 ```
 
 `--evaluacion` solo si existe. `--generado` es la fecha de generación, que se pasa porque
 **nada lee el reloj**: el papel tiene que poder regenerarse idéntico.
+
+`--manifiesto` es lo que convierte la celda del fichero en **hipervínculo al documento**,
+con ruta absoluta. **Y si los scripts no comparten disco con el auditor —Cowork—, la ruta
+del contenedor no le sirve de nada**: pásale además `--carpeta-documentos` con la carpeta
+de los escaneos tal como la ve él, la misma que te dio en el paso 3, y el vínculo se rehace
+sobre ella. Sin ninguno de los dos, la celda queda como texto y el script lo dice: es
+mejor sin vínculo que con un vínculo que no abre nada.
 
 Salida `2` → **para**: el contrato no se cumple —la población no tiene columna de importe,
 la prueba no es MUM, la evaluación tiene forma de prueba de cumplimiento— y **no se ha
@@ -318,9 +330,15 @@ trabajo. Los PDF no se copian a ningún sitio.
 
 **Una sola hoja, «Análisis muestra».** Una fila por elemento seleccionado: sus columnas de
 población tal como vienen —incluidas `Repeticiones`, que es cuántas unidades de muestreo
-representa—, el documento localizado y lo leído en él, por qué clave casó, las tres columnas
-de la MUM rotuladas **(propuesto)**, con qué término se comparó, y la **observación
-propuesta** lista para copiar a ForSampling.
+representa—, el documento localizado y lo leído en él, las tres columnas de la MUM —**VRL
+(muestra)**, **Valor Auditoría (doc)** y **Error**, más el % —, con qué término se
+comparó, la **observación propuesta** lista para copiar a ForSampling y, al final, por
+qué clave casó el documento.
+
+Las columnas van en **cuatro zonas de color**, cada una con su banda de título: A los
+datos de la muestra tal como los guarda ForSampling, B lo leído en el documento, C la
+prueba de muestreo y D la evidencia del cruce. El **Error y el % son fórmulas**: al
+cambiar el valor según auditoría se recalculan solos.
 
 Las tres columnas **sí** se rellenan, al contrario que los atributos de la prueba de
 cumplimiento, y la diferencia no es un descuido: un atributo es un veredicto, y rellenarlo

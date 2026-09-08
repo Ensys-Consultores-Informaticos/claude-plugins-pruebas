@@ -90,16 +90,14 @@ def _pista_iva(error: float, fac: dict) -> str:
     """
     iva = parse_importe(fac.get("iva"))
     if iva and abs(abs(error) - abs(iva)) <= TOL_IVA_PISTA:
-        return (f"la diferencia coincide con la cuota de IVA del documento ({_fmt(iva)}): puede ser el "
-                f"criterio de contabilización -el apunte con IVA y la muestra comparando contra la base, "
-                f"o al revés- y no una incorrección")
+        return (f"coincide con la cuota de IVA del documento ({_fmt(iva)}): puede ser criterio "
+                f"de contabilización, no incorrección")
     base = parse_importe(fac.get("base"))
     if base:
         for tipo in (21, 10, 4):
             if abs(abs(error) - round(abs(base) * tipo / 100.0, 2)) <= TOL_IVA_PISTA:
-                return (f"la diferencia coincide con un IVA del {tipo} % sobre la base "
-                        f"({_fmt(round(abs(base) * tipo / 100.0, 2))}): puede ser el criterio de "
-                        f"contabilización y no una incorrección")
+                return (f"coincide con un IVA del {tipo} %: puede ser criterio de "
+                        f"contabilización, no incorrección")
     return ""
 
 
@@ -127,13 +125,12 @@ def evaluar_mum(cruce: dict, cols: dict) -> list[dict]:
             error = 0.0
             tasa = 0.0
         elif not termino:
-            nota = ("El documento no casa con el saldo y la muestra no fija un criterio claro "
-                    "(total, base o neto): el término de comparación lo decide el auditor")
+            nota = ("sin criterio de comparación claro (total, base o neto): lo decide "
+                    "el auditor")
         else:
             v = _valor(fac, termino)
             if v is None:
-                nota = (f"No se ha podido leer {NOMBRE_TERMINO[termino]} en el documento, que es "
-                        f"con lo que compara esta muestra")
+                nota = f"no se lee {NOMBRE_TERMINO[termino]} en el documento"
             else:
                 usado = termino
                 # El signo del saldo manda: en una poblacion de ingresos los
@@ -149,39 +146,47 @@ def evaluar_mum(cruce: dict, cols: dict) -> list[dict]:
     return salida
 
 
-def observacion_mum(e: dict) -> str:
-    """La observación que se copia a ForSampling, firmada.
+def _may(t: str) -> str:
+    return (t[:1].upper() + t[1:]) if t else t
 
-    Sigue el registro que usa el auditor en estas pruebas -«Ok. Revisada factura
-    de honorarios»- y añade las cifras cuando hay diferencia, que es lo que no se
-    puede reconstruir después.
+
+def observacion_mum(e: dict) -> str:
+    """La observación que se copia a ForSampling, firmada y CORTA.
+
+    Sigue el registro telegráfico que usa el propio auditor en estas pruebas
+    -«Fra N: <numero> a fecha de <fecha> y con importe correcto», la plantilla que
+    apareció igual en los 18 de 18 elementos de un encargo real- y **no repite lo
+    que ya está en su columna**. El importe en libros, el valor según auditoría, el error y el
+    porcentaje se ven al lado, en el papel y en la rejilla de ForSampling:
+    escribirlos otra vez alarga la nota sin añadir nada.
+
+    Aquí va solo lo que no se puede reconstruir de las columnas: qué documento se
+    miró, hacia qué lado está la diferencia, la pista de que puede ser criterio de
+    contabilización y no incorrección, y los avisos del cruce.
+
+    Dice «Ok» cuando no hay diferencia -decisión de David, 08/09/2026-, y detrás
+    «importe correcto», que son las palabras de su propia plantilla. El «Ok»
+    delante es lo que permite barrer la columna de un vistazo, igual que en
+    fsp-cumplimiento.
     """
     fac = e["factura"]
     if fac is None:
-        return "Asistente IA: no localizado el documento de este elemento en la carpeta revisada"
+        return "Asistente IA: documento no localizado."
     c = e.get("criterios") or {}
     cola = ""
     if c.get("declarado"):
-        cola = ". Documento asignado a mano en facturas.json, no por el cruce"
+        cola = " Asignado a mano, no por el cruce."
     elif c.get("ambiguo"):
-        cola = (". ATENCIÓN: asignado solo por tercero y fecha, y había más de un candidato con la "
-                "misma coincidencia: confirma que el documento es el de este elemento")
-    quien = fac.get("proveedor") or "—"
+        cola = " ATENCIÓN: varios candidatos por tercero y fecha, confirma el documento."
     num = fac.get("numero")
-    ref = f"factura {num} de {quien}" if num else f"factura de {quien}"
+    ref = f"Fra {num}" if num else f"factura de {fac.get('proveedor') or '—'}"
     if e["error"] is None:
-        return f"Asistente IA: revisada {ref}. {e['nota']}" + cola
+        return f"Asistente IA: {ref}: {e['nota']}." + cola
+    nota = f" {_may(e['nota'])}." if e.get("nota") else ""
     if abs(e["error"]) <= TOL:
-        base = f"Ok. Revisada {ref}: {_fmt(e['saldo_auditoria'])} ({NOMBRE_TERMINO[e['termino']]}), " \
-               f"coincide con el importe en libros"
-        return f"Asistente IA: {base}" + (f". {e['nota']}" if e["nota"] else "") + cola
-    mas = abs(e["saldo"]) > abs(e["saldo_auditoria"])
-    signo = "de más en libros" if mas else "de menos en libros"
-    txt = (f"Revisada {ref}: según el documento {_fmt(e['saldo_auditoria'])} "
-           f"({NOMBRE_TERMINO[e['termino']]}), en libros {_fmt(e['saldo'])}. "
-           f"Diferencia {_fmt(abs(e['error']))} {signo}"
-           + (f" ({e['tasa']:.2f} %)".replace(".", ",") if e["tasa"] is not None else ""))
-    return f"Asistente IA: {txt}" + (f". {e['nota']}" if e["nota"] else "") + cola
+        return f"Asistente IA: Ok. {ref}: importe correcto." + nota + cola
+    signo = "de más" if abs(e["saldo"]) > abs(e["saldo_auditoria"]) else "de menos"
+    return f"Asistente IA: {ref}: {_fmt(abs(e['error']))} {signo} en libros." + nota + cola
 
 
 def recuento(evaluados: list[dict]) -> dict:

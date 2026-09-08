@@ -26,6 +26,22 @@ de punteo previo (la columna Indice que traen muchos .smn):
            verificacion estructural sigue cuadrando
   9999908  punteo previo completo -- todo punteado: el skill no añade
            ningun grupo y no toca nada
+  9999910  2.0 por numero de factura -- UNA factura de 2.743,70 muerta por
+           TRES pagos de 914,48 / 914,48 / 914,74. Ningun criterio de
+           importes llega ahi: los pagos no se parecen a la factura ni entre
+           si. Son las cifras reales del caso que lo motivo
+  9999911  2.0 con el campo SUCIO -- dos apuntes con el mismo numero de
+           factura que NO suman cero: el grupo se rechaza. Es la prueba de
+           que el numero PROPONE y la suma DECIDE, no al contrario
+  9999912  2.0 y el resto conviven -- una factura que cierra por documento y,
+           aparte, un par que solo cierra por importe: los dos pasos suman
+  9999913  2.2c la APERTURA por deduccion -- tres pagos con numero de factura
+           cuya factura NO esta en el ejercicio (o sea, esta en la apertura),
+           mas la regularizacion de centimos que cierra el hueco. Ningun
+           subconjunto de los pagos da el importe de la apertura, asi que el
+           2.2b no puede con esto
+  9999914  2.2c que NO cierra -- lo mismo sin la regularizacion: la apertura se
+           queda pendiente y no se fuerza nada
 
 Por que hace falta: en una cuenta sin nada que cancelar, un emparejador
 roto y uno correcto pueden dar el mismo resultado (todo en INDICE 0). Que
@@ -48,10 +64,12 @@ from lib_cancelacion import (  # noqa: E402
 )
 
 
-def _df(filas, con_punteo=False):
+def _df(filas, con_punteo=False, con_factura=False):
     cols = ["FECHA", "CUENTA", "NOMBRE", "CONCEPTO", "SALDO"]
     if con_punteo:
         cols.append("INDICE_PREVIO")
+    if con_factura:
+        cols.append("FACTURA")
     d = pd.DataFrame(filas, columns=cols)
     d["FECHA"] = pd.to_datetime(d["FECHA"])
     d["SALDO"] = d["SALDO"].astype(float)
@@ -121,6 +139,53 @@ FIXTURES = {
     ], con_punteo=True),
     # Apertura que NO se puede cancelar: ningun subconjunto de los pagos da
     # exactamente su importe. Tiene que quedarse pendiente, no forzarse.
+    # 2.0: el caso que motivo el paso, con las cifras reales de un expediente.
+    # Una compra y tres pagos a 30/60/90 dias que solo se atan por el numero de
+    # documento. Sin el, el pareo directo no ve nada y la combinatoria tendria
+    # que dar con un subconjunto de tres entre los sueltos de toda la cuenta.
+    "9999910": _df([
+        ("2024-01-10", "9999910", "Proveedor Diez", "Compra", -2743.70, "12"),
+        ("2024-02-10", "9999910", "Proveedor Diez", "Pago 1/3", 914.48, "12"),
+        ("2024-03-11", "9999910", "Proveedor Diez", "Pago 2/3", 914.48, "12"),
+        ("2024-04-10", "9999910", "Proveedor Diez", "Pago 3/3", 914.74, "12"),
+        ("2024-05-10", "9999910", "Proveedor Diez", "Fra viva", -500.00, "13"),
+    ], con_factura=True),
+    # 2.0 con el campo sucio: mismo numero, no suman cero. Se rechaza el grupo.
+    # El 77 tampoco cierra por importes, asi que los dos tienen que quedar
+    # pendientes: es la garantia de que el numero no manda.
+    "9999911": _df([
+        ("2024-01-10", "9999911", "Proveedor Once", "Fra A", -1000.00, "77"),
+        ("2024-02-10", "9999911", "Proveedor Once", "Pago parcial", 300.00, "77"),
+    ], con_factura=True),
+    # 2.0 y los pasos de importes conviven: la 88 cierra por documento (tres
+    # apuntes) y el par de la 99/sin numero solo cierra por importe.
+    "9999912": _df([
+        ("2024-01-10", "9999912", "Proveedor Doce", "Fra 88", -600.00, "88"),
+        ("2024-02-10", "9999912", "Proveedor Doce", "Pago 88 a", 250.00, "88"),
+        ("2024-03-10", "9999912", "Proveedor Doce", "Pago 88 b", 350.00, "88"),
+        ("2024-04-10", "9999912", "Proveedor Doce", "Fra 99", -400.00, "99"),
+        ("2024-05-10", "9999912", "Proveedor Doce", "Pago sin numero", 400.00, ""),
+    ], con_factura=True),
+    # 2.2c: la apertura contra pagos de facturas que no estan en el ejercicio.
+    # Las facturas 900/901/902 solo aparecen como PAGO: sus facturas son del año
+    # anterior y viven dentro de la apertura. 2000+1500+1600 = 5100 contra una
+    # apertura de 5000, y el hueco de 100 lo cierra la regularizacion. Ningun
+    # subconjunto de los pagos suma 5000, asi que el 2.2b no llega.
+    "9999913": _df([
+        ("2024-01-01", "9999913", "Proveedor Trece", "Apertura", -5000.00, ""),
+        ("2024-02-10", "9999913", "Proveedor Trece", "Pago fra 2023", 2000.00, "900"),
+        ("2024-03-10", "9999913", "Proveedor Trece", "Pago fra 2023", 1500.00, "901"),
+        ("2024-04-10", "9999913", "Proveedor Trece", "Pago fra 2023", 1600.00, "902"),
+        ("2024-12-31", "9999913", "Proveedor Trece", "Regularizacion", -100.00, ""),
+        ("2024-06-01", "9999913", "Proveedor Trece", "Fra del año, viva", -800.00, "10"),
+    ], con_factura=True),
+    # y sin la regularizacion no cierra: la apertura se queda pendiente.
+    "9999914": _df([
+        ("2024-01-01", "9999914", "Proveedor Catorce", "Apertura", -5000.00, ""),
+        ("2024-02-10", "9999914", "Proveedor Catorce", "Pago fra 2023", 2000.00, "900"),
+        ("2024-03-10", "9999914", "Proveedor Catorce", "Pago fra 2023", 1500.00, "901"),
+        ("2024-04-10", "9999914", "Proveedor Catorce", "Pago fra 2023", 1600.00, "902"),
+    ], con_factura=True),
     "9999909": _df([
         ("2024-01-01", "9999909", "Cliente Nueve", "Apertura", 1000.00),
         ("2024-01-15", "9999909", "Cliente Nueve", "Pago 1", -400.00),
@@ -312,6 +377,63 @@ def main() -> int:
     if ap_pendiente and nada_apertura:
         print("OK  9999909 (2.2b): una apertura que no cuadra se queda pendiente")
 
+    # 9999910 -- 2.0: una factura y sus tres pagos, atados por el documento
+    res, _ = asignar_indices_cuenta(FIXTURES["9999910"])
+    grupo = ["Compra", "Pago 1/3", "Pago 2/3", "Pago 3/3"]
+    if not _mismo_indice(res, grupo):
+        fallos.append("9999910 (2.0): la compra y sus TRES pagos deberian compartir indice")
+    elif not _es_cero(res, "Fra viva"):
+        fallos.append("9999910 (2.0): la factura sin pagar deberia quedar pendiente")
+    elif not res.loc[res["CONCEPTO"].isin(grupo), "GRUPO_FACTURA"].all():
+        fallos.append("9999910 (2.0): el grupo deberia venir marcado GRUPO_FACTURA")
+    else:
+        print("OK  9999910 (2.0): una factura muerta por tres pagos desiguales, por numero de documento")
+
+    # 9999911 -- el numero propone, la suma decide: grupo que no cierra, se rechaza
+    res, _ = asignar_indices_cuenta(FIXTURES["9999911"])
+    if not (_es_cero(res, "Fra A") and _es_cero(res, "Pago parcial")):
+        fallos.append("9999911 (2.0): un grupo por numero que NO suma cero no se puede aceptar")
+    elif res["GRUPO_FACTURA"].any():
+        fallos.append("9999911 (2.0): no deberia haber ningun GRUPO_FACTURA")
+    else:
+        print("OK  9999911 (2.0): el numero PROPONE y la suma DECIDE: grupo que no cierra, rechazado")
+
+    # 9999912 -- 2.0 no desplaza a los pasos de importes: los dos suman
+    res, _ = asignar_indices_cuenta(FIXTURES["9999912"])
+    por_doc = ["Fra 88", "Pago 88 a", "Pago 88 b"]
+    por_imp = ["Fra 99", "Pago sin numero"]
+    if not _mismo_indice(res, por_doc):
+        fallos.append("9999912 (2.0): la 88 deberia cerrarse por documento")
+    elif not _mismo_indice(res, por_imp):
+        fallos.append("9999912 (2.3): el par que solo cierra por importe deberia seguir cerrandose")
+    elif res.loc[res["CONCEPTO"].isin(por_imp), "GRUPO_FACTURA"].any():
+        fallos.append("9999912: el par por importe no viene del documento y no debe marcarse")
+    else:
+        print("OK  9999912 (2.0+2.3): el documento y el importe se complementan, no se estorban")
+
+    # 9999913 -- 2.2c: la apertura se mata deduciendo que esas facturas no estan
+    res, _ = asignar_indices_cuenta(FIXTURES["9999913"])
+    grupo = ["Apertura", "Pago fra 2023", "Regularizacion"]
+    idx_ap = res.loc[res["CONCEPTO"] == "Apertura", "INDICE"].iloc[0]
+    del_grupo = res[res["INDICE"] == idx_ap]
+    if idx_ap == 0:
+        fallos.append("9999913 (2.2c): la apertura deberia haberse cancelado")
+    elif len(del_grupo) != 5:
+        fallos.append(f"9999913 (2.2c): el grupo de la apertura deberia tener 5 apuntes, tiene {len(del_grupo)}")
+    elif not _es_cero(res, "Fra del año, viva"):
+        fallos.append("9999913 (2.2c): la factura del año sin pagar deberia quedar pendiente")
+    elif not del_grupo["GRUPO_APERTURA"].all():
+        fallos.append("9999913 (2.2c): el grupo deberia venir marcado GRUPO_APERTURA")
+    else:
+        print("OK  9999913 (2.2c): la apertura se cancela con los pagos de facturas ajenas al ejercicio")
+
+    # 9999914 -- sin la regularizacion no cuadra: no se fuerza
+    res, _ = asignar_indices_cuenta(FIXTURES["9999914"])
+    if not _es_cero(res, "Apertura"):
+        fallos.append("9999914 (2.2c): sin el apunte que cierra el hueco, la apertura NO se puede cancelar")
+    else:
+        print("OK  9999914 (2.2c): si no cuadra al centimo, la apertura se queda pendiente")
+
     for cuenta, datos in FIXTURES.items():
         res, _ = asignar_indices_cuenta(datos)
         info = verificar_cuenta(res)
@@ -324,7 +446,46 @@ def main() -> int:
             print("  - " + f)
         return 1
 
-    print("\nTodo detectado. El emparejador ve los nueve casos y las verificaciones cuadran.")
+    # -- el papel: las posiciones de columna se DERIVAN de la cabecera
+    # Estaban escritas a mano -j == 5 para el saldo- y al insertar FACTURA el
+    # formato de euros y el amarillo se quedaron una columna a la izquierda. Un
+    # papel donde el amarillo senala la columna de al lado es peor que no tenerlo.
+    import subprocess
+    import tempfile
+
+    from openpyxl import load_workbook
+
+    tmp = Path(tempfile.mkdtemp())
+    fx = FIXTURES["9999913"].copy()
+    fx["ASIENTO"] = [str(i) for i in range(1, len(fx) + 1)]
+    fx["FECHA"] = fx["FECHA"].dt.strftime("%Y-%m-%d")
+    (tmp / "e.json").write_text(fx.to_json(orient="records"), encoding="utf-8")
+    ruta = tmp / "p.xlsx"
+    subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "generar_papel.py"),
+                    "--entrada", str(tmp / "e.json"), "--salida", str(ruta)],
+                   capture_output=True)
+    if not ruta.exists():
+        fallos.append("el papel no se ha podido generar sobre el fixture 9999913")
+    else:
+        ws = load_workbook(ruta)["9999913"]
+        cab = [ws.cell(row=4, column=j).value for j in range(1, 12)]
+        i_saldo, i_idx = cab.index("SALDO") + 1, cab.index("INDICE") + 1
+        bien = []
+        for f in range(5, ws.max_row + 1):
+            if ws.cell(row=f, column=i_idx).value == 0:
+                c = ws.cell(row=f, column=i_saldo)
+                rgb = (getattr(c.fill.fgColor, "rgb", None)
+                       if c.fill and c.fill.patternType else None)
+                bien.append(str(rgb).endswith("FFFF00")
+                            and c.number_format.startswith("#,##0.00"))
+        if not ("ASIENTO" in cab and "FACTURA" in cab):
+            fallos.append("el papel deberia traer ASIENTO y FACTURA cuando el extracto las trae")
+        elif not (bien and all(bien)):
+            fallos.append("el amarillo y el formato de euros tienen que caer en SALDO")
+        else:
+            print("OK  el papel: ASIENTO y FACTURA presentes, y el amarillo cae en SALDO")
+
+    print("\nTodo detectado. El emparejador ve los catorce casos y las verificaciones cuadran.")
     return 0
 
 

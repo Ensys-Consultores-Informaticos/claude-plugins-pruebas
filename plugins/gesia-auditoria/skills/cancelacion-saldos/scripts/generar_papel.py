@@ -68,10 +68,31 @@ def _hoja_cuenta(wb: Workbook, cuenta: str, res, info: dict) -> dict:
                 "contabilidad; amarillo: importe sin parear, que compone el "
                 "saldo vivo de la cuenta")
     ws["A2"].font = Font(name=FONT, italic=True, size=9, color="595959")
-    ws.merge_cells("A1:G1")
-    ws.merge_cells("A2:G2")
-
-    cab = ["FECHA", "CUENTA", "NOMBRE", "CONCEPTO", "SALDO", "INDICE", "ORIGEN"]
+    # la banda de titulo llega hasta la ultima columna, que es una mas cuando el
+    # extracto trae el numero de documento
+    con_fra = "FACTURA" in res.columns
+    # La cabecera se ARMA, y los indices de columna se DERIVAN de ella. Estaban
+    # escritos a mano -j == 5 para el saldo- y al insertar FACTURA el formato de
+    # euros y el amarillo se quedaron una columna a la izquierda. Un papel donde
+    # el amarillo senala la columna de al lado no se puede publicar, asi que
+    # ninguna posicion vuelve a ir a mano.
+    #
+    # ASIENTO va si el extracto lo trae: sin el, un apunte del papel no se puede
+    # localizar en Gesia ni casar con el papel que el auditor ya tuviera. Se vio
+    # al cruzar este papel con uno real: hubo que casar por fecha e importe, y
+    # dos apuntes identicos del mismo dia colapsaban en uno.
+    con_asi = "ASIENTO" in res.columns
+    cab = ["FECHA"]
+    if con_asi:
+        cab.append("ASIENTO")
+    cab += ["CUENTA", "NOMBRE", "CONCEPTO"]
+    if con_fra:
+        cab.append("FACTURA")
+    cab += ["SALDO", "INDICE", "ORIGEN"]
+    col = {h: j for j, h in enumerate(cab, start=1)}
+    ultima = get_column_letter(len(cab))
+    ws.merge_cells(f"A1:{ultima}1")
+    ws.merge_cells(f"A2:{ultima}2")
     fila_cab = 4
     for j, h in enumerate(cab, start=1):
         c = ws.cell(fila_cab, j, h)
@@ -86,8 +107,13 @@ def _hoja_cuenta(wb: Workbook, cuenta: str, res, info: dict) -> dict:
     ordenado = res.sort_values("FECHA", kind="stable").reset_index(drop=True)
     fila = fila_cab + 1
     for _, r in ordenado.iterrows():
-        valores = [r["FECHA"].to_pydatetime(), r["CUENTA"], r["NOMBRE"], r["CONCEPTO"],
-                   float(r["SALDO"]), int(r["INDICE"]), r["ORIGEN"]]
+        valores = [r["FECHA"].to_pydatetime()]
+        if con_asi:
+            valores.append(str(r.get("ASIENTO", "") or ""))
+        valores += [r["CUENTA"], r["NOMBRE"], r["CONCEPTO"]]
+        if con_fra:
+            valores.append(r.get("FACTURA", "") or "")
+        valores += [float(r["SALDO"]), int(r["INDICE"]), r["ORIGEN"]]
         # Gris a la fila entera del punteo contable; amarillo SOLO a la celda
         # del importe que queda sin parear, que es lo que compone el saldo
         # vivo de la cuenta (revision del 27/08/2026). Lo cancelado
@@ -99,13 +125,13 @@ def _hoja_cuenta(wb: Workbook, cuenta: str, res, info: dict) -> dict:
             c = ws.cell(fila, j, v)
             c.font = Font(name=FONT, size=10)
             c.border = BORDE
-            if j == 1:
+            if j == col["FECHA"]:
                 c.number_format = FORMATO_FECHA
-            elif j == 5:
+            elif j == col["SALDO"]:
                 c.number_format = FORMATO_EURO
-            elif j in (6, 7):
+            elif j in (col["INDICE"], col["ORIGEN"], col.get("ASIENTO", -1)):
                 c.alignment = Alignment(horizontal="center")
-            if j == 5 and sin_parear:
+            if j == col["SALDO"] and sin_parear:
                 c.fill = AMARILLO
             elif relleno_fila:
                 c.fill = relleno_fila
@@ -143,9 +169,12 @@ def _hoja_cuenta(wb: Workbook, cuenta: str, res, info: dict) -> dict:
     c = ws.cell(fila_sig, 5, "OK" if ok else "REVISAR")
     c.font = Font(name=FONT, bold=True, size=10, color="000000" if ok else "C00000")
 
-    anchos = {1: 12, 2: 13, 3: 20, 4: 34, 5: 15, 6: 9, 7: 11}
-    for col, w in anchos.items():
-        ws.column_dimensions[get_column_letter(col)].width = w
+    # los anchos, tambien por nombre y no por posicion
+    anchos = {"FECHA": 12, "ASIENTO": 9, "CUENTA": 13, "NOMBRE": 20, "CONCEPTO": 34,
+              "FACTURA": 14, "SALDO": 15, "INDICE": 9, "ORIGEN": 11}
+    for h, w in anchos.items():
+        if h in col:
+            ws.column_dimensions[get_column_letter(col[h])].width = w
     ws.freeze_panes = "A" + str(fila_cab + 1)
     # solo las filas de datos: las de totales quedan fuera del filtro
     ws.auto_filter.ref = "A" + str(fila_cab) + ":G" + str(fila - 1)
@@ -246,6 +275,11 @@ def _hoja_criterios(ws, h: dict) -> None:
     f = linea(f, "  cancelada", h["aperturas_canceladas"])
     f = linea(f, "  sigue viva", h["aperturas_vivas"])
     f = linea(f, "  importe vivo", float(h["aperturas_importe_vivo"]))
+    f = linea(f, "Aperturas NO identificadas", h["aperturas_no_identificadas"],
+              "varios apuntes el 1 de enero, o cuenta de un solo apunte: no se sabe cual "
+              "es la apertura, asi que el emparejamiento NO la ha intentado. No es que no "
+              "se haya podido cerrar, es que no se ha mirado")
+    f = linea(f, "  importe", float(h["aperturas_importe_no_identificado"]))
     f = linea(f, "Cuentas sin apertura detectada", h["cuentas_sin_apertura"],
               "Puede ser una cuenta abierta en el ejercicio, o que el diario no traiga "
               "el asiento de apertura. Si el saldo inicial deberia estar y no aparece, "
@@ -404,6 +438,12 @@ def main() -> int:
     if hallazgos["aperturas_vivas"]:
         print("  AVISO: " + str(hallazgos["aperturas_vivas"]) + " apertura(s) sin cancelar, "
               + format(hallazgos["aperturas_importe_vivo"], ",.2f") + " €")
+    if hallazgos["aperturas_no_identificadas"]:
+        print("  AVISO: " + str(hallazgos["aperturas_no_identificadas"]) + " apertura(s) que NO se "
+              "han podido identificar (varios apuntes el 1 de enero, o cuenta de un solo apunte), "
+              + format(hallazgos["aperturas_importe_no_identificado"], ",.2f") + " €. El "
+              "emparejamiento no las ha intentado: no es que no cuadren, es que no se sabe cual "
+              "es la apertura")
     con_error = [f for f in filas_resumen if not f["ok"]]
     if con_error:
         print("  AVISO: " + str(len(con_error)) + " cuenta(s) no verifican -- revisar "

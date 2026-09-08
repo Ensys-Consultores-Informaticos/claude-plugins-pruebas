@@ -118,6 +118,22 @@ def cargar_extracto(ruta) -> pd.DataFrame:
         else:
             raise ValueError("no hay columna SALDO ni DEBE/HABER para derivarla")
 
+    # El NUMERO DE DOCUMENTO, tambien OPCIONAL. En el diario de Gesia es
+    # NN_Factura; el extracto puede traerlo con ese nombre o ya renombrado.
+    # "0" y vacio significan «sin factura» y se normalizan a "", que es lo que
+    # el paso 2.0 ignora.
+    col_fra = next(
+        (c for c in df.columns
+         if str(c).strip().lower() in ("nn_factura", "factura", "nfactura",
+                                       "num_factura", "numfactura")),
+        None,
+    )
+    if col_fra is not None:
+        df["FACTURA"] = (df[col_fra].fillna("").astype(str).str.strip()
+                         .replace({"0": "", "nan": "", "None": ""}))
+        if col_fra != "FACTURA":
+            df = df.drop(columns=[col_fra])
+
     col_prev = next(
         (c for c in df.columns
          if str(c).strip().lower() in ("indice", "índice", "indice_previo")),
@@ -152,28 +168,151 @@ def cargar_extracto(ruta) -> pd.DataFrame:
     return df
 
 
+def _indice_apertura(df: pd.DataFrame):
+    """El apunte de apertura de lo que sigue pendiente, o None.
+
+    Se reconoce POR ESTRUCTURA, no por el texto del concepto: es del 1 de enero
+    -no puede haber saldo anterior a eso- y es el apunte mas antiguo de los que
+    quedan. Y tiene que ser el UNICO de ese dia, porque si hay varios no se sabe
+    cual es la apertura. Lo usan el 2.2c y el 2.2b, y por eso vive aparte: dos
+    copias de esta regla acabarian divergiendo.
+    """
+    pend = df[df["INDICE"] == 0].sort_values("FECHA")
+    if len(pend) < 2:
+        return None
+    primero = pend.index[0]
+    del_dia_1 = pend[(pend["FECHA"].dt.month == 1) & (pend["FECHA"].dt.day == 1)]
+    if len(del_dia_1) == 1 and del_dia_1.index[0] == primero:
+        return primero
+    return None
+
+
+def _indice_apertura_informe(res: pd.DataFrame):
+    """La apertura de una cuenta YA emparejada, con la misma regla del algoritmo.
+
+    _indice_apertura mira solo lo que sigue pendiente, porque es lo que necesita el
+    emparejamiento. Para informar hace falta verla tambien cuando ya se cancelo, asi
+    que la regla se aplica sobre la cuenta entera: 1 de enero, el mas antiguo, y el
+    UNICO de ese dia. La regla es la misma; el conjunto sobre el que se aplica, no.
+    """
+    if len(res) < 2:
+        return None
+    orden = res.sort_values("FECHA")
+    primero = orden.index[0]
+    del_dia_1 = orden[(orden["FECHA"].dt.month == 1) & (orden["FECHA"].dt.day == 1)]
+    if len(del_dia_1) == 1 and del_dia_1.index[0] == primero:
+        return primero
+    return None
+
+
 def _emparejar_pendientes(df: pd.DataFrame, next_idx: int) -> int:
-    """Aplica 2.1-2.4 a un df cuyos apuntes vienen TODOS con INDICE 0,
+    """Aplica 2.0-2.4 a un df cuyos apuntes vienen TODOS con INDICE 0,
     mutando INDICE, GRUPO_24 y GRUPO_APERTURA sobre sus etiquetas de indice (que no tienen
     por que ser 0..n: puede ser el subconjunto sin puntear de una cuenta).
     Devuelve el primer indice libre tras asignar.
     """
-    total = _round2(df["SALDO"].sum())
+    # --- 2.0: grupos por NUMERO DE FACTURA, aceptados solo si suman cero ---
+    # La clave con la que el propio auditor empareja a mano. En su papel de un
+    # expediente real la columna «Factura» ata una compra de 2.743,70 con sus
+    # TRES pagos a 30, 60 y 90 dias (914,48 + 914,48 + 914,74), y eso no lo
+    # alcanza ningun criterio de importes: los pagos no se parecen a la factura
+    # ni entre si. La combinatoria de 2.4b tampoco, y no por el tope: buscar
+    # subconjuntos de hasta 6 entre los 135 apuntes que quedaban sueltos en esa
+    # cuenta son mas de 7.000 millones de combinaciones. Agrupar por documento
+    # no busca: particiona.
+    #
+    # LA REGLA, y es la que hace que esto no sea adivinar: **el numero PROPONE
+    # y la suma DECIDE.** Un grupo se acepta solo si sus apuntes suman cero. Si
+    # el campo viniera sucio, repetido entre ejercicios o significase otra cosa,
+    # ningun grupo cerraria y el resultado seria identico a no haberlo mirado.
+    # El numero no es autoridad: solo dice por donde empezar a sumar.
+    #
+    # Por eso NO contradice la decision de descartar CONCEPTO como senal (ver
+    # DISENO.md): aquello era pareo difuso de texto sin regla objetiva de
+    # aceptacion. Aqui la regla es exacta y es la misma de siempre, sumar cero.
+    if "FACTURA" in df.columns:
+        pend_fra = df[(df["INDICE"] == 0) & (df["FACTURA"] != "")]
+        for _, grupo in pend_fra.groupby("FACTURA", sort=True):
+            if len(grupo) < 2:
+                continue
+            if abs(_round2(grupo["SALDO"].sum())) < TOL:
+                df.loc[grupo.index, "INDICE"] = next_idx
+                df.loc[grupo.index, "GRUPO_FACTURA"] = True
+                next_idx += 1
+
+    # --- 2.2c: la APERTURA contra los pagos de facturas ajenas al ejercicio ---
+    # Matar la apertura es lo que mas vale del procedimiento, y el 2.2b no llegaba:
+    # busca subconjuntos de hasta 6 pagos entre los 14 primeros, y en la cuenta que
+    # motivo esto hacian falta 24. Con el numero de documento no hay que buscar.
+    #
+    # EL RAZONAMIENTO: despues del 2.0, un apunte que sigue pendiente, que lleva
+    # numero de factura, cuyo grupo de ese numero NO cierra, y que va en sentido
+    # contrario a la apertura, es un PAGO cuya factura no esta en este ejercicio.
+    # Y si no esta en el ejercicio, esta dentro de la apertura: es del anterior.
+    # No hay que adivinarlo, se deduce de que falte.
+    #
+    # Sigue decidiendo la suma: el grupo se acepta solo si apertura + esos pagos da
+    # cero. Medido en un expediente real, tres cuentas cerraron al centimo.
+    #
+    # EL HUECO DE LOS CENTIMOS: cuando no cierra, se admite UN solo apunte mas -sin
+    # numero de factura- cuyo importe sea exactamente el hueco que falta. Es la
+    # regularizacion de saldos de fin de ejercicio, que en ese expediente valia
+    # -2,65 en una cuenta y -136,50 en otra. Uno solo y exacto: nada de buscar
+    # combinaciones ni de tolerar diferencias, que eso es materialidad y la decide
+    # el auditor.
+    if "FACTURA" in df.columns:
+        ap = _indice_apertura(df)
+        if ap is not None:
+            saldo_ap = _round2(df.loc[ap, "SALDO"])
+            signo_pago = -1 if saldo_ap > 0 else 1
+            pend = df[(df["INDICE"] == 0) & (df.index != ap)]
+            # los grupos de numero que NO cierran, y solo por el lado del pago
+            huerfanos = []
+            con_fra = pend[pend["FACTURA"] != ""]
+            for _, g in con_fra.groupby("FACTURA", sort=True):
+                if abs(_round2(g["SALDO"].sum())) < TOL:
+                    continue          # ese ya lo habria cogido el 2.0
+                if all(signo_pago * v > TOL for v in g["SALDO"]):
+                    huerfanos += list(g.index)
+            if huerfanos:
+                suma = _round2(saldo_ap + sum(df.loc[huerfanos, "SALDO"]))
+                grupo = list(huerfanos)
+                if abs(suma) >= TOL:
+                    # el hueco: un unico apunte sin factura que lo cierre exacto
+                    resto = pend[(pend["FACTURA"] == "") & (~pend.index.isin(huerfanos))]
+                    cierra = [i for i in resto.index
+                              if abs(_round2(df.loc[i, "SALDO"] + suma)) < TOL]
+                    if len(cierra) >= 1:
+                        grupo.append(cierra[0])
+                        suma = _round2(suma + df.loc[cierra[0], "SALDO"])
+                if abs(suma) < TOL:
+                    for x in [ap] + grupo:
+                        df.loc[x, "INDICE"] = next_idx
+                        df.loc[x, "GRUPO_APERTURA"] = True
+                    next_idx += 1
+
+    # A partir de aqui, todo va sobre lo que SIGUE pendiente. Cuando el extracto
+    # no trae numero de documento -o ningun grupo cerraba-, esto es el df
+    # entero y el comportamiento es exactamente el de antes.
+    pend_idx = df.index[df["INDICE"] == 0]
+    if len(pend_idx) == 0:
+        return next_idx
+    total = _round2(df.loc[pend_idx, "SALDO"].sum())
 
     # --- 2.1: si el total pendiente ya es cero, todo un solo indice ---
     if abs(total) < TOL:
-        df["INDICE"] = next_idx
+        df.loc[pend_idx, "INDICE"] = next_idx
         return next_idx + 1
 
     # --- 2.2: si el total coincide con el saldo del ULTIMO apunte
     #          (orden cronologico), cancelar todos menos ese ---
-    orden_fecha = df.sort_values(["FECHA"]).index.tolist()
+    orden_fecha = df.loc[pend_idx].sort_values(["FECHA"]).index.tolist()
     ultimo_idx = orden_fecha[-1]
     ultimo_saldo = _round2(df.loc[ultimo_idx, "SALDO"])
 
-    if abs(total - ultimo_saldo) < TOL and len(df) > 1:
-        mascara = df.index != ultimo_idx
-        df.loc[mascara, "INDICE"] = next_idx
+    if abs(total - ultimo_saldo) < TOL and len(orden_fecha) > 1:
+        resto = [i for i in orden_fecha if i != ultimo_idx]
+        df.loc[resto, "INDICE"] = next_idx
         return next_idx + 1  # el ultimo se queda con INDICE 0 (pendiente)
 
     # --- 2.2b: la apertura primero ---------------------------------------
@@ -189,10 +328,9 @@ def _emparejar_pendientes(df: pd.DataFrame, next_idx: int) -> int:
     # mas antiguo de la cuenta. Y no se presupone el signo: en una cuenta
     # acreedora es un abono que cancelan pagos, y en una deudora al reves.
     pend = df[df["INDICE"] == 0].sort_values("FECHA")
-    if len(pend) > 1:
-        primero = pend.index[0]
-        del_dia_1 = pend[(pend["FECHA"].dt.month == 1) & (pend["FECHA"].dt.day == 1)]
-        if len(del_dia_1) == 1 and del_dia_1.index[0] == primero:
+    primero = _indice_apertura(df)
+    if primero is not None:
+        if True:
             objetivo = -_round2(df.loc[primero, "SALDO"])
             signo = 1 if objetivo > 0 else -1
             candidatos = [i for i in pend.index[1:]
@@ -327,6 +465,8 @@ def asignar_indices_cuenta(df_cta: pd.DataFrame):
                  (para resaltar en el informe)
       GRUPO_APERTURA  True si el grupo es el de la apertura y sus pagos
                  (procedimiento 2.2b)
+      GRUPO_FACTURA   True si el grupo salio del numero de documento
+                 (procedimiento 2.0), verificado por suma cero
     """
     df = df_cta.copy().reset_index(drop=True)
     df["SaldoABS"] = df["SALDO"].abs().round(2)
@@ -344,19 +484,24 @@ def asignar_indices_cuenta(df_cta: pd.DataFrame):
     df.loc[prev > 0, "ORIGEN"] = ORIGEN_CONTABLE
     df["GRUPO_24"] = False
     df["GRUPO_APERTURA"] = False
+    df["GRUPO_FACTURA"] = False
 
     next_idx = int(prev.max()) + 1
     pendientes = df.index[df["INDICE"] == 0]
     if len(pendientes) == 0:
         return df, next_idx
 
-    sub = df.loc[pendientes, ["FECHA", "SALDO", "SaldoABS", "INDICE",
-                             "GRUPO_24", "GRUPO_APERTURA"]].copy()
+    cols_sub = ["FECHA", "SALDO", "SaldoABS", "INDICE", "GRUPO_24",
+                "GRUPO_APERTURA", "GRUPO_FACTURA"]
+    if "FACTURA" in df.columns:
+        cols_sub.append("FACTURA")
+    sub = df.loc[pendientes, cols_sub].copy()
     next_idx = _emparejar_pendientes(sub, next_idx)
 
     df.loc[sub.index, "INDICE"] = sub["INDICE"]
     df.loc[sub.index, "GRUPO_24"] = sub["GRUPO_24"]
     df.loc[sub.index, "GRUPO_APERTURA"] = sub["GRUPO_APERTURA"]
+    df.loc[sub.index, "GRUPO_FACTURA"] = sub["GRUPO_FACTURA"]
     df.loc[sub.index[sub["INDICE"] > 0], "ORIGEN"] = ORIGEN_AUDITORIA
     return df, next_idx
 
@@ -497,6 +642,8 @@ def analizar_hallazgos(df: pd.DataFrame, por_cuenta: dict) -> dict:
     ap_detectadas = ap_canceladas = ap_vivas = 0
     ap_importe_vivo = 0.0
     ctas_sin_apertura = 0
+    ap_no_identificadas = 0
+    ap_importe_no_ident = 0.0
 
     for cuenta, (res, _info) in por_cuenta.items():
         # cuantos apuntes de cada importe hay: dice si el pareo tenia eleccion
@@ -507,16 +654,33 @@ def analizar_hallazgos(df: pd.DataFrame, por_cuenta: dict) -> dict:
             lado = "pos" if r["SALDO"] > 0 else "neg"
             cuenta_por_importe[round(abs(r["SALDO"]), 2)][lado] += 1
 
+        # LA MISMA deteccion que usa el emparejamiento (_indice_apertura), no otra.
+        # Habia tres definiciones distintas de «apertura» en este fichero y el papel
+        # contaba 19 aperturas vivas donde el reconocimiento contaba 10: el papel
+        # incluia cuentas con VARIOS apuntes del 1 de enero -donde no se sabe cual es
+        # la apertura- y cuentas de un solo apunte. Medido el 08/09/2026 sobre 71
+        # cuentas reales.
+        #
+        # Y esas no desaparecen del informe: se cuentan APARTE, porque el algoritmo
+        # NO LAS HA INTENTADO. Meterlas entre las vivas dice «no se ha podido» cuando
+        # lo cierto es «no se ha mirado», que es la distincion que este papel cuida en
+        # todos los demas recuentos.
+        idx_ap = _indice_apertura_informe(res)
         primero = res.sort_values("FECHA").iloc[0] if len(res) else None
-        hay_apertura = (primero is not None
-                        and primero["FECHA"].month == 1 and primero["FECHA"].day == 1)
-        if hay_apertura:
+        parece_apertura = (primero is not None
+                           and primero["FECHA"].month == 1 and primero["FECHA"].day == 1)
+        if idx_ap is not None:
             ap_detectadas += 1
-            if primero["INDICE"] > 0:
+            if res.loc[idx_ap, "INDICE"] > 0:
                 ap_canceladas += 1
             else:
                 ap_vivas += 1
-                ap_importe_vivo = _round2(ap_importe_vivo + abs(primero["SALDO"]))
+                ap_importe_vivo = _round2(ap_importe_vivo
+                                          + abs(res.loc[idx_ap, "SALDO"]))
+        elif parece_apertura:
+            ap_no_identificadas += 1
+            ap_importe_no_ident = _round2(ap_importe_no_ident
+                                          + abs(primero["SALDO"]))
         else:
             ctas_sin_apertura += 1
 
@@ -574,6 +738,8 @@ def analizar_hallazgos(df: pd.DataFrame, por_cuenta: dict) -> dict:
         "aperturas_vivas": ap_vivas,
         "aperturas_importe_vivo": ap_importe_vivo,
         "cuentas_sin_apertura": ctas_sin_apertura,
+        "aperturas_no_identificadas": ap_no_identificadas,
+        "aperturas_importe_no_identificado": ap_importe_no_ident,
     }
 
 

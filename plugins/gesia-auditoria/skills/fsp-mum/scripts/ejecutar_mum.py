@@ -9,6 +9,7 @@ Es lo que hacen los dos scripts de debajo, en una sola llamada:
 
     verificar_contrato.py --muestra X --parametros P --facturas F [--evaluacion E]
     generar_papel.py      --muestra X --parametros P --facturas F [--evaluacion E] --salida Y --generado D
+                          [--manifiesto M] [--carpeta-documentos C]
 
 Por que existe: cada llamada obliga al modelo a un turno mas, y un turno cuesta la
 superficie entera del MCP. El ahorro no esta en escribir menos, esta en volver menos
@@ -81,6 +82,8 @@ def main() -> int:
     p.add_argument("--evaluacion")
     p.add_argument("--salida", required=True)
     p.add_argument("--generado", required=True)
+    p.add_argument("--manifiesto")
+    p.add_argument("--carpeta-documentos", dest="carpeta_documentos")
     args = p.parse_args()
 
     comunes = ["--muestra", args.muestra, "--parametros", args.parametros, "--facturas", args.facturas]
@@ -94,7 +97,13 @@ def main() -> int:
         return 2
 
     print("")
-    sys.argv = ["generar_papel.py"] + comunes + ["--salida", args.salida, "--generado", args.generado]
+    # los dos del hipervinculo van SOLO al papel: verificar_contrato no los conoce
+    del_papel = ["--salida", args.salida, "--generado", args.generado]
+    if args.manifiesto:
+        del_papel += ["--manifiesto", args.manifiesto]
+    if args.carpeta_documentos:
+        del_papel += ["--carpeta-documentos", args.carpeta_documentos]
+    sys.argv = ["generar_papel.py"] + comunes + del_papel
     codigo_papel, salida_papel = _capturar(generar_papel.main)
     if codigo_papel != 0:
         return 2

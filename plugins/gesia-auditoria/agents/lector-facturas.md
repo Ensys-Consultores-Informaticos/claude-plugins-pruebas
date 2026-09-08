@@ -28,13 +28,18 @@ Una entrada por fichero, con exactamente estas claves:
 
 ```json
 {"fichero": "<tal cual te lo dan>", "proveedor": "", "cif": "", "numero": "", "fecha": "DD/MM/AAAA",
- "base": "", "pct_iva": "", "iva": "", "irpf": "", "total": "", "albaranes": [], "paginas": 0,
- "notas": ""}
+ "concepto": "", "base": "", "pct_iva": "", "iva": "", "irpf": "", "total": "",
+ "albaranes": [], "paginas": 0, "notas": ""}
 ```
 
 - Importes **como los imprime el documento**, con coma decimal y sin símbolo: `12500,00`.
 - `numero` **tal como lo escribe el proveedor**, con su serie, barras y guiones: `FA25/00042`,
   `B/17`, `PF-2025000777`. No lo normalices: eso lo hace el cruce.
+- `concepto`: **de qué es la factura, en una línea corta y con las palabras del documento**
+  (el epígrafe de la línea principal, o el asunto si lo trae). Es **descriptivo: no interviene
+  en el cruce**, así que si el documento trae muchas líneas basta la de más importe o el
+  encabezado general. Lo que no se hace es resumirlo inventando ni traducirlo. Si no se ve,
+  vacío.
 - `pct_iva` e `irpf` **solo si aparecen**. Si el documento dice que la operación está exenta,
   no sujeta o con inversión del sujeto pasivo, `iva` es `0,00` y lo dices en `notas`.
 - `paginas`: cuántas tiene el documento si lo indica («1 de 3»); si no, cuántas imágenes te

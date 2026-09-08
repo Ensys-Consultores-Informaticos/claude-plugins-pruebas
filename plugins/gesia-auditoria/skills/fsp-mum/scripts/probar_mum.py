@@ -57,7 +57,8 @@ MUESTRA = [
 FACTURAS = [
     # E1: base 17.000 = saldo -> casa por base
     {"fichero": "1 - OMICRON 25-114.pdf", "proveedor": "OMICRON CONSULTORES", "numero": "25-114",
-     "fecha": "13/03/2025", "base": "12500,00", "iva": "2625,00", "total": "15125,00"},
+     "fecha": "13/03/2025", "concepto": "Honorarios de consultoria", "base": "12500,00",
+     "iva": "2625,00", "total": "15125,00"},
     # E2: la factura dice 4.500,00 y los libros 4.950,00
     {"fichero": "2 - ALFA FK25-00133.pdf", "proveedor": "ALFA, LDA.", "numero": "FA25/00042",
      "fecha": "25/02/2025", "base": "4500,00", "iva": "0,00", "total": "4500,00"},
@@ -120,13 +121,18 @@ def main() -> int:
        "y con empate tampoco: lo decide el auditor")
 
     # -- los elementos
-    ok(e1["error"] == 0.0 and e1["termino"] == "base" and e1["observacion"].startswith("Asistente IA: Ok."),
-       "E1: gasto por la base que el documento sostiene -> error 0 y observacion Ok")
+    ok(e1["error"] == 0.0 and e1["termino"] == "base"
+       and e1["observacion"] == "Asistente IA: Ok. Fra 25-114: importe correcto.",
+       "E1: gasto por la base que el documento sostiene -> error 0 y observacion de una linea")
     ok(e2["saldo_auditoria"] == 4500.0 and e2["error"] == 450.0 and e2["tasa"] == 9.09,
        "E2: diferencia real -> saldo auditoria 4.500,00, error 450,00 y tasa 9,09 %")
-    ok("4.500,00" in e2["observacion"] and "4.950,00" in e2["observacion"]
-       and "de mas en libros" in e2["observacion"].replace("á", "a"),
-       "E2: la observacion lleva las dos cifras y dice de que lado esta la diferencia")
+    ok("450,00" in e2["observacion"] and "de mas en libros" in e2["observacion"].replace("á", "a"),
+       "E2: la observacion dice la diferencia y hacia que lado esta")
+    ok("4.950,00" not in e2["observacion"] and "4.500,00" not in e2["observacion"]
+       and "9,09" not in e2["observacion"],
+       "E2: y NO repite el saldo, el valor de auditoria ni el %: cada uno esta en su columna")
+    ok(max(len(x["observacion"]) for x in ev) <= 150,
+       f"ninguna observacion pasa de 150 caracteres (la mas larga: {max(len(x['observacion']) for x in ev)})")
     ok(e3["error"] is None and e3["saldo_auditoria"] is None and "no localizado" in e3["observacion"],
        "E3: sin documento no se inventa importe segun auditoria")
     ok(e4["error"] == 0.0 and e4["termino"] == "total",
@@ -266,6 +272,75 @@ def main() -> int:
        "y dice que sobra z.pdf, que ningun documento del inventario respalda")
     ok("poblacion_id" not in _f[1], "un lector no puede atar documentos a elementos: la fusion le quita poblacion_id")
     ok(_r["parciales"] == 3 and _r["entradas"] == 3, "un lote con JSON invalido se ignora avisando, sin tumbar la fusion")
+
+    # -- el papel: cuatro zonas de color, el campo principal repetido y el error como
+    # formula. Se comprueba la HOJA, no solo los numeros: el layout es lo que el auditor
+    # ve, y una formula mal puesta en un elemento sin medir pintaria el saldo entero
+    # como error.
+    try:
+        from openpyxl import Workbook as _WB
+        from openpyxl.utils import get_column_letter as _L
+        import generar_papel as _gp
+    except ImportError:
+        print("-      el papel: sin openpyxl al lado no se comprueba la hoja")
+    else:
+        _params = {"Prueba": "PRUEBA SINTETICA", "MuestraId": 7, "Area": "GA",
+                   "Referencia": "GA)1", "parametros": {"UnidadMuestreo": "1000",
+                   "PoblacionNumElementos": "500", "ErrorTolerableValor": "5000"}}
+        _wb = _WB()
+        _gp._hoja(_wb, ev, cols, _params, "2026-09-08")
+        _ws = _wb.active
+        _banda = [c.value for c in _ws[6] if c.value]
+        ok([str(x)[:1] for x in _banda] == ["A", "B", "C", "D"],
+           "el papel lleva las cuatro bandas de zona: muestra, documento, prueba y cruce")
+        _i = {v: n + 1 for n, v in enumerate(c.value for c in _ws[7]) if v}
+        ok(all(k in _i for k in ("CIF", "Proveedor o cliente", "Concepto", "Fecha doc.")),
+           "la zona del documento trae CIF, tercero, concepto y su propia fecha")
+        ok(_i["Fecha doc."] != _i.get("Fecha"),
+           "y la fecha del documento no se confunde con la del apunte en el filtro")
+        ok(_ws.cell(row=8, column=_i["Concepto"]).value == "Honorarios de consultoria",
+           "y el concepto leido en el documento llega al papel")
+        ok("VRL (muestra)" in _i and "Valor Auditoría (doc)" in _i and "Error" in _i,
+           "la zona de la prueba va en el lenguaje del muestreo: VRL, Valor Auditoria y Error")
+        _fs = _ws.cell(row=8, column=_i["VRL (muestra)"]).value
+        ok(_fs == f"={_L(_i['Saldo'])}8",
+           "el campo principal de la zona C REFERENCIA el de la zona A: el saldo tiene un solo origen")
+        _fe = _ws.cell(row=8, column=_i["Error"]).value
+        _cs, _cv = _L(_i["VRL (muestra)"]), _L(_i["Valor Auditoría (doc)"])
+        ok(_fe == f'=IFERROR({_cs}8-{_cv}8,"")',
+           "el error es formula Saldo - Valor auditoria, y envuelta en IFERROR")
+        _fp = _ws.cell(row=8, column=_i["% error"]).value
+        ok(isinstance(_fp, str) and _fp.startswith("=IFERROR(") and "ABS(" in _fp
+           and _fp.endswith('*100,"")'),
+           "el % de error es formula sobre magnitudes: con IFERROR, un saldo 0 deja la celda en blanco")
+        ok("SI.ERROR" not in _fe and "SI.ERROR" not in _fp,
+           "la funcion se guarda en INGLES: SI.ERROR en el fichero rompe la formula")
+        ok(_ws.cell(row=10, column=_i["Error"]).value is None
+           and _ws.cell(row=10, column=_i["% error"]).value is None,
+           "E3, sin documento: SIN formula en error ni en %, para no restar de una celda vacia")
+        ok(_ws.cell(row=8, column=_i["Fichero"]).hyperlink is None,
+           "sin manifiesto ni carpeta no hay hipervinculo: mejor texto que un vinculo que miente")
+        # y con las rutas, enlace absoluto en la celda del fichero
+        _rt = _gp.rutas_documentos(None, str(_t))
+        _wb2 = _WB()
+        _gp._hoja(_wb2, ev, cols, _params, "2026-09-08",
+                  {"1 - OMICRON 25-114.pdf": str(_t / "1 - OMICRON 25-114.pdf")})
+        _h = _wb2.active.cell(row=8, column=_i["Fichero"]).hyperlink
+        ok(_h is not None and Path(_h.target or _h.location or "").is_absolute(),
+           "con la ruta del documento, la celda del fichero enlaza y la ruta es ABSOLUTA")
+        ok(_wb2.active.cell(row=10, column=_i["Fichero"]).hyperlink is None,
+           "y un elemento sin documento no enlaza a ninguna parte")
+        # -- las fechas son fechas, y los dias una resta
+        from datetime import date as _date, datetime as _dt
+        _fl = _ws.cell(row=8, column=_i["Fecha"]).value
+        _fd = _ws.cell(row=8, column=_i["Fecha doc."]).value
+        ok(isinstance(_fl, (_date, _dt)) and isinstance(_fd, (_date, _dt)),
+           "las dos fechas se escriben como FECHA, no como texto: si no, no hay resta posible")
+        _fdias = _ws.cell(row=8, column=_i["Días libros–doc."]).value
+        ok(_fdias == f'=IFERROR({_L(_i["Fecha"])}8-{_L(_i["Fecha doc."])}8,"")',
+           "los dias son la resta de las dos fechas, en el sentido que calcula el cruce")
+        ok((_fl - _fd).days == e1["criterios"]["dias"],
+           "y la resta de las celdas da lo MISMO que el cruce en Python: el papel no se desvia")
 
     # -- la libreria compartida no puede derivar entre skills
     propia = Path(__file__).resolve().parent / "lib_fsp.py"

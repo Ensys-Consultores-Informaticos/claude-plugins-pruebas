@@ -227,7 +227,8 @@ documentos**, no al final:
 ```json
 {"facturas": [
   {"fichero": "7 - PROVEEDOR FRA A-125.pdf", "proveedor": "Asesores Argos, S.L.P.", "cif": "B00000000",
-   "numero": "A-125", "fecha": "14/04/2025", "base": "1000,00", "pct_iva": "21",
+   "numero": "A-125", "fecha": "14/04/2025",
+   "concepto": "Honorarios de asesoría fiscal, 1er trimestre", "base": "1000,00", "pct_iva": "21",
    "iva": "210,00", "irpf": "150,00", "total": "1210,00", "albaranes": ["25-0018"],
    "paginas": 3, "notas": ""}
 ]}
@@ -235,7 +236,8 @@ documentos**, no al final:
 
 `fichero` tal cual se llama en la carpeta; importes como los ves, con coma decimal; el
 número de factura **tal como lo escribe el proveedor** (`FA25/00042`, `A00/00000901`,
-`FT 1/1130`): el cruce lo normaliza él. `pct_iva` e `irpf`, solo si el documento los trae.
+`FT 1/1130`): el cruce lo normaliza él. `pct_iva` e `irpf`, solo si el documento los trae. `concepto` es de qué es la factura, en
+una línea y con las palabras del documento: describe, **no interviene en el cruce**.
 Si algo no se lee, **déjalo vacío** y dilo en `notas`: nunca lo completes por deducción ni
 lo copies de otra factura del mismo proveedor. El contrato avisa de cuántos van sin total
 o sin número.
