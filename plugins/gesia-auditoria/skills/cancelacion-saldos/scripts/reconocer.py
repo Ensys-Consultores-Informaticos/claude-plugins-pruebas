@@ -77,6 +77,13 @@ def reconocer(df) -> dict:
             "por_documento": int(res["GRUPO_FACTURA"].sum()) if "GRUPO_FACTURA" in res else 0,
             "apertura": round(float(ap["SALDO"]), 2) if es_ap else 0.0,
             "apertura_abierta": bool(es_ap and int(ap["INDICE"]) == 0),
+            # el primero es del 1 de enero pero la regla no puede decir cual es la
+            # apertura (varios ese dia, o cuenta de un solo apunte): NO se ha
+            # intentado, y eso no es lo mismo que no haber podido
+            "apertura_no_identificable": bool(
+                idx_ap is None and len(res) and orden.iloc[0]["FECHA"].month == 1
+                and orden.iloc[0]["FECHA"].day == 1),
+            "apertura_aparente": round(float(orden.iloc[0]["SALDO"]), 2) if len(res) else 0.0,
             "total": round(float(res["SALDO"].sum()), 2),
             "tamanos": Counter(res.loc[res["INDICE"] > 0].groupby("INDICE").size().tolist()),
         })
@@ -95,6 +102,17 @@ def reconocer(df) -> dict:
         "importe_aperturas_abiertas": round(
             sum(abs(c["apertura"]) for c in d if c["apertura_abierta"]), 2),
         "atascadas": [c["cuenta"] for c in d if c["sueltos"] > MAX_LEFTOVER_FOR_COMBOS],
+        # CON NOMBRE Y APELLIDOS. La pregunta por el mayor del ejercicio anterior
+        # decia «queda 1 apertura sin cancelar por 1.460,78» y NO decia de que
+        # cuenta, asi que el auditor no podia ir a buscar el mayor de nada. Lo
+        # reporto David el 08/09/2026 probando el canal de pruebas.
+        "abiertas_detalle": sorted(
+            [(c["cuenta"], c["nombre"], c["apertura"]) for c in d if c["apertura_abierta"]],
+            key=lambda x: -abs(x[2])),
+        "no_identificadas_detalle": sorted(
+            [(c["cuenta"], c["nombre"], c["apertura_aparente"]) for c in d
+             if c["apertura_no_identificable"]],
+            key=lambda x: -abs(x[2])),
     }
     # patron de pago: cuantos grupos de mas de dos apuntes salen del documento.
     # Muchos grupos de 3 o 4 son pagos a plazos, y eso se VE, no hace falta
@@ -144,6 +162,21 @@ def _informe(info: dict) -> list[str]:
         f"    se quedarian SIN cancelar .... {r['aperturas_abiertas']}"
         f"  ({_eur(r['importe_aperturas_abiertas'])})",
     ]
+    if r["abiertas_detalle"]:
+        L += ["", "    las que se quedan sin cerrar:"]
+        L += [f"      {c}  {n:30} {_eur(imp):>14}" for c, n, imp in r["abiertas_detalle"][:10]]
+        if len(r["abiertas_detalle"]) > 10:
+            L.append(f"      ... y {len(r['abiertas_detalle']) - 10} mas")
+    if r["no_identificadas_detalle"]:
+        L += ["",
+              f"    NO IDENTIFICABLES ({len(r['no_identificadas_detalle'])}): varios apuntes el "
+              "1 de enero, o cuenta de un solo apunte.",
+              "    El emparejamiento NO las ha intentado: no es que no cuadren, es que no se "
+              "sabe cual es la apertura."]
+        L += [f"      {c}  {n:30} {_eur(imp):>14}"
+              for c, n, imp in r["no_identificadas_detalle"][:10]]
+        if len(r["no_identificadas_detalle"]) > 10:
+            L.append(f"      ... y {len(r['no_identificadas_detalle']) - 10} mas")
     if r["atascadas"]:
         L += ["",
               f"  CUENTAS QUE SE ATASCAN ({len(r['atascadas'])}): mas de "
@@ -157,15 +190,25 @@ def _informe(info: dict) -> list[str]:
         P.append("¿El diario del cliente trae numero de factura o de documento? Si existe con "
                  "otro nombre, dime cual: es la señal que mas cancela y el extracto no la trae.")
     if r["aperturas_abiertas"]:
+        # con la cuenta y el nombre: sin eso el auditor no puede ir a buscar el
+        # mayor de nada, que es justo lo que se le esta pidiendo
+        cuales = "; ".join(f"{c} {n} ({_eur(imp)})"
+                           for c, n, imp in r["abiertas_detalle"][:6])
+        if len(r["abiertas_detalle"]) > 6:
+            cuales += f"; y {len(r['abiertas_detalle']) - 6} mas"
         P.append(f"Quedan {r['aperturas_abiertas']} apertura(s) sin cancelar por "
-                 f"{_eur(r['importe_aperturas_abiertas'])}. ¿Hay mayor del ejercicio anterior, y "
-                 "donde esta? Con el se puede atar factura por factura, y cerrar aperturas "
-                 "pagadas solo en parte.")
+                 f"{_eur(r['importe_aperturas_abiertas'])}: {cuales}. ¿Hay mayor del ejercicio "
+                 "anterior de esas cuentas, y donde esta? Con el se puede atar factura por "
+                 "factura, y cerrar aperturas pagadas solo en parte.")
     if info["casi_cuadran"]:
         n = len(info["casi_cuadran"])
+        cuales = "; ".join(f"{cta} doc. {fra} ({_eur(s)})"
+                           for cta, fra, s, _ in info["casi_cuadran"][:4])
+        if n > 4:
+            cuales += f"; y {n - 4} mas"
         P.append(f"Hay {n} grupo(s) de un mismo documento que se quedan a menos de 5 centimos "
-                 "de cuadrar. ¿Se pueden barrer esas diferencias, y con que umbral? Es "
-                 "materialidad y la decide el auditor: por defecto se quedan pendientes.")
+                 f"de cuadrar: {cuales}. ¿Se pueden barrer esas diferencias, y con que umbral? "
+                 "Es materialidad y la decide el auditor: por defecto se quedan pendientes.")
     P.append("¿Como paga o cobra este cliente? Plazos (30/60/90), remesas que agrupan varias "
              "facturas, confirming, pagos parciales. Lo que digas cambia el tamaño de grupo "
              "que se busca.")
