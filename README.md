@@ -19,6 +19,15 @@ Para volver a producción: desactiva o desinstala este, reactiva el de `ensys` y
 
 ## Qué se prueba ahora
 
+**MCP 1.11.1 (plugin de pruebas 1.10.3, 10/09/2026).** `configurar(gs3_anterior=…)` para el expediente
+del ejercicio anterior —`configurar()` lo sugiere en `gs3_anterior_sugerido` cuando existe `<mismo nombre>
+<año-1>.gs3` en la misma carpeta o en la hermana—, y `exportar_consulta` / `columnas` con
+`fuente="diario_anterior"`, mismas reglas que `diario`. Es la pieza del MCP del futuro paso 0c de la
+cancelación; el skill aún no lo usa. Y las REGLAS SQL de la ayuda dicen lo que JET no sabe hacer
+(`COUNT(DISTINCT)`, `LIMIT`, `CASE WHEN`, `COALESCE`) con su forma correcta. Qué probar: que
+`configurar()` sobre un expediente con `.gs3` de N-1 al lado lo sugiera, y que el modelo no lo
+configure si nadie se lo pide.
+
 **Plugin de pruebas 1.10.2 — segundo registro del 10/09/2026.** En `cancelacion-saldos`: la
 puntuación de las columnas candidatas se mide sobre el extracto de cada alcance (y dice «vacía aquí»
 cuando lo está); las cuentas de un solo apunte del 1 de enero van aparte de las aperturas no
