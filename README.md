@@ -19,6 +19,13 @@ Para volver a producción: desactiva o desinstala este, reactiva el de `ensys` y
 
 ## Qué se prueba ahora
 
+**Plugin de pruebas 1.10.2 — segundo registro del 10/09/2026.** En `cancelacion-saldos`: la
+puntuación de las columnas candidatas se mide sobre el extracto de cada alcance (y dice «vacía aquí»
+cuando lo está); las cuentas de un solo apunte del 1 de enero van aparte de las aperturas no
+identificables, con su recuento e importe; el stdout del papel acaba con una línea `TOTAL`
+(cuentas, apuntes, pendiente, verificación) que no se lleva el corte a 30 cuentas; y la ruta de
+entrega se deriva siempre de `configurar().gs3_file`.
+
 **Plugin de pruebas 1.10.1 — lo que salió de la primera prueba en frío (10/09/2026).** En
 `cancelacion-saldos`: la columna `ORIGEN` del papel dice el paso que formó cada grupo (documento,
 apertura, total, importe, acumulación, combinación) y criterios cuenta cuántos hay de cada uno; si el

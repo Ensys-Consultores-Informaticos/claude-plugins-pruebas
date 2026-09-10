@@ -617,12 +617,13 @@ def main() -> int:
         f17["ASIENTO"] = [str(i) for i in range(1, len(f17) + 1)]
         f17["FECHA"] = f17["FECHA"].dt.strftime("%Y-%m-%d")
         f17 = f17.rename(columns={"FACTURA": "NN_Factura"})
-        f17["NN_Documento"] = "ZZZ"          # agrupa todo en un solo grupo que NO suma cero
+        f17["NN_Documento"] = ["ZZZ", "ZZZ", "ZZZ", "ZZZ", ""]   # un grupo de 4 que NO suma cero (-400)
         f17 = f17[["FECHA", "CUENTA", "NOMBRE", "CONCEPTO", "NN_Documento", "NN_Factura", "SALDO", "ASIENTO"]]  # la mala ANTES
         (tmp / "e17.json").write_text(f17.to_json(orient="records"), encoding="utf-8")
         df17 = cargar_extracto(tmp / "e17.json")
         cand17 = df17.attrs.get("candidatas_documento") or []
-        if df17.attrs.get("fuente_documento") != "NN_Factura" or len(cand17) != 2 or cand17[0][0] != "NN_Factura":
+        if df17.attrs.get("fuente_documento") != "NN_Factura" or len(cand17) != 2 or cand17[0][0] != "NN_Factura" \
+                or len(cand17[0]) != 4 or cand17[0][3] != 4 or cand17[1][2] != 0:   # 4 apuntes con valor; la mala no cierra ninguno
             fallos.append("9999917: con dos candidatas tiene que ganar la que mas grupos cierra (NN_Factura), no la primera del SELECT: "
                           + str(df17.attrs.get("fuente_documento")) + " " + str(cand17))
         elif "NN_Documento" in df17.columns or "NN_Factura" in df17.columns:
@@ -665,6 +666,30 @@ def main() -> int:
                           + str({k: h18.get(k) for k in ("anomalos", "anomalos_sin_fecha_doc", "solo_fecha_registro", "grupos_evaluados")}))
         else:
             print("OK  9999918 (sin fecha de documento): el pago anterior cae en su propia fila y no se vende como hallazgo cierto")
+        # 9999919 -- una cuenta de UN solo apunte del 1 de enero va aparte de las «no identificables»
+        f19 = pd.concat([f18, pd.DataFrame([
+            {"FECHA": "2024-01-01", "CUENTA": "9999919", "NOMBRE": "Proveedor Diecinueve", "SALDO": -75.0, "FechaEnConcepto": None, "ASIENTO": "7"},
+            {"FECHA": "2024-01-01", "CUENTA": "9999920", "NOMBRE": "Proveedor Veinte", "SALDO": -40.0, "FechaEnConcepto": None, "ASIENTO": "8"},
+            {"FECHA": "2024-01-01", "CUENTA": "9999920", "NOMBRE": "Proveedor Veinte", "SALDO": -60.0, "FechaEnConcepto": None, "ASIENTO": "9"},
+            {"FECHA": "2024-02-01", "CUENTA": "9999920", "NOMBRE": "Proveedor Veinte", "SALDO": 30.0, "FechaEnConcepto": None, "ASIENTO": "10"},
+        ])], ignore_index=True)
+        (tmp / "e19.json").write_text(f19.to_json(orient="records"), encoding="utf-8")
+        df19 = cargar_extracto(tmp / "e19.json")
+        h19 = analizar_hallazgos(df19, procesar_extracto(df19))
+        if h19.get("cuentas_un_apunte") != 1 or abs(h19.get("importe_un_apunte", 0) - 75.0) > 0.005 \
+                or h19["aperturas_no_identificadas"] != 1 or abs(h19["aperturas_importe_no_identificado"] - 40.0) > 0.005:
+            fallos.append("9999919: la cuenta de un solo apunte (75) va aparte de la apertura no identificable (dos el 1 de enero, 40): "
+                          + str({k: h19.get(k) for k in ("cuentas_un_apunte", "importe_un_apunte", "aperturas_no_identificadas", "aperturas_importe_no_identificado")}))
+        else:
+            print("OK  9999919 (un solo apunte): separada de las aperturas no identificables, con su recuento y su importe")
+        r19 = subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "generar_papel.py"),
+                              "--entrada", str(tmp / "e19.json"), "--salida", str(tmp / "p19.xlsx")],
+                             capture_output=True, text=True, encoding="utf-8")
+        tot = [l for l in r19.stdout.splitlines() if l.strip().startswith("TOTAL ")]
+        if not tot or "3 cuenta(s)" not in tot[0] or "pendiente total" not in tot[0] or "verificacion: todas OK" not in tot[0]:
+            fallos.append("9999919: el stdout del papel tiene que acabar con una linea TOTAL con cuentas, apuntes, pendiente y verificacion: " + str(tot))
+        else:
+            print("OK  9999919 (stdout): linea TOTAL con el agregado, que el corte a 30 cuentas se llevaba")
         ruta18 = tmp / "p18.xlsx"
         subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "generar_papel.py"),
                         "--entrada", str(tmp / "e18.json"), "--salida", str(ruta18)], capture_output=True)
@@ -684,7 +709,7 @@ def main() -> int:
         for f in fallos:
             print("  - " + f)
         return 1
-    print("\nTodo detectado. El emparejador ve los dieciocho casos y las verificaciones cuadran.")
+    print("\nTodo detectado. El emparejador ve los diecinueve casos y las verificaciones cuadran.")
     return 0
 
 

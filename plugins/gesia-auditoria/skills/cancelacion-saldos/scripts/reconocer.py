@@ -87,7 +87,11 @@ def reconocer(df) -> dict:
             # apertura (varios ese dia, o cuenta de un solo apunte): NO se ha
             # intentado, y eso no es lo mismo que no haber podido
             "apertura_no_identificable": bool(
-                idx_ap is None and len(res) and orden.iloc[0]["FECHA"].month == 1
+                idx_ap is None and len(res) > 1 and orden.iloc[0]["FECHA"].month == 1
+                and orden.iloc[0]["FECHA"].day == 1),
+            # un solo apunte, del 1 de enero: no hay nada que cancelar; va aparte
+            "un_solo_apunte": bool(
+                len(res) == 1 and orden.iloc[0]["FECHA"].month == 1
                 and orden.iloc[0]["FECHA"].day == 1),
             "apertura_aparente": round(float(orden.iloc[0]["SALDO"]), 2) if len(res) else 0.0,
             "total": round(float(res["SALDO"].sum()), 2),
@@ -118,6 +122,10 @@ def reconocer(df) -> dict:
         "no_identificadas_detalle": sorted(
             [(c["cuenta"], c["nombre"], c["apertura_aparente"]) for c in d
              if c["apertura_no_identificable"]],
+            key=lambda x: -abs(x[2])),
+        "un_solo_apunte_detalle": sorted(
+            [(c["cuenta"], c["nombre"], c["apertura_aparente"]) for c in d
+             if c["un_solo_apunte"]],
             key=lambda x: -abs(x[2])),
     }
     # patron de pago: cuantos grupos de mas de dos apuntes salen del documento.
@@ -158,8 +166,11 @@ def _informe(info: dict) -> list[str]:
             else f" (columna {cols.get('fuente_documento')}; ")
            + f"{info['sin_documento']} apuntes sin numero)"
            if cols["numero_documento"] else "  <-- SIN ESTO EL RESULTADO ES MUCHO PEOR"),
-        *([("    columnas candidatas a numero: " + " · ".join(
-                f"{c} cierra {z} de {g} grupos" for c, g, z in cols["candidatas_documento"])
+        *([("    columnas candidatas a numero, medidas SOBRE ESTE EXTRACTO (no se heredan de otro "
+            "grupo del mismo diario): " + " · ".join(
+                (f"{t[0]} VACIA aqui" if not t[3] else f"{t[0]} cierra {t[2]} de {t[1]} grupos"
+                 + ("" if t[1] else f" ({t[3]} apuntes con valor, ninguno repetido)"))
+                for t in cols["candidatas_documento"])
             + "  -> elegida " + str(cols.get("fuente_documento")) + " (la que mas cierra; dilo al entregar)")]
           if len(cols["candidatas_documento"]) > 1 else []),
         f"    fecha de documento ........... {'SI' if cols['fecha_documento'] else 'NO'}"
@@ -186,13 +197,22 @@ def _informe(info: dict) -> list[str]:
     if r["no_identificadas_detalle"]:
         L += ["",
               f"    NO IDENTIFICABLES ({len(r['no_identificadas_detalle'])}): varios apuntes el "
-              "1 de enero, o cuenta de un solo apunte.",
+              "1 de enero.",
               "    El emparejamiento NO las ha intentado: no es que no cuadren, es que no se "
               "sabe cual es la apertura."]
         L += [f"      {c}  {n:30} {_eur(imp):>14}"
               for c, n, imp in r["no_identificadas_detalle"][:10]]
         if len(r["no_identificadas_detalle"]) > 10:
             L.append(f"      ... y {len(r['no_identificadas_detalle']) - 10} mas")
+    if r["un_solo_apunte_detalle"]:
+        L += ["",
+              f"    CUENTAS DE UN SOLO APUNTE ({len(r['un_solo_apunte_detalle'])}), del 1 de enero: "
+              "no hay nada que cancelar.",
+              "    No son aperturas sin identificar ni un frente abierto: un unico movimiento vivo."]
+        L += [f"      {c}  {n:30} {_eur(imp):>14}"
+              for c, n, imp in r["un_solo_apunte_detalle"][:10]]
+        if len(r["un_solo_apunte_detalle"]) > 10:
+            L.append(f"      ... y {len(r['un_solo_apunte_detalle']) - 10} mas")
     if r["atascadas"]:
         L += ["",
               f"  CUENTAS QUE SE ATASCAN ({len(r['atascadas'])}): mas de "

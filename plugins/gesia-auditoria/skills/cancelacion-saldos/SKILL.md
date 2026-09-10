@@ -31,7 +31,9 @@ esconde facturas ya liquidadas.
 
 Los ficheros se escriben en `<expediente>\InformesGesia\CancelacionSaldos\`
 y **nunca se publican** en ninguna URL: son la contabilidad de un cliente
-auditado.
+auditado. **`<expediente>` es la carpeta del `gs3_file` que devuelve `configurar()`**,
+no una ruta escrita a mano ni recordada de otra sesión: el 10/09/2026 apareció en la
+carpeta de un expediente el papel de otro.
 
 ---
 
@@ -262,7 +264,10 @@ existen**; si no, no se piden — pedir una que no está da el error de Access
   `columnas()` enseñe con «factura» o «documento» en el nombre —un diario puede traer
   `NN_Factura` y `NN_Documento` a la vez, pasó el 10/09/2026—: **no elijas tú**. El script
   puntúa cada una por los grupos que cierra a cero, se queda con la que más cierra, y
-  el reconocimiento y la hoja de criterios dicen cuál y por cuánto. Es la clave con la que el auditor
+  el reconocimiento y la hoja de criterios dicen cuál y por cuánto. **Esa puntuación es
+  del extracto de este alcance, no del diario**: la misma columna estaba llena en el
+  grupo 400 y vacía en el 43 del mismo `.smn`. No la heredes de una ejecución anterior
+  sobre otro grupo, aunque sea el mismo expediente y el mismo día. Es la clave con la que el auditor
   empareja a mano, y con ella el skill cancela lo que ningún criterio de importes
   alcanza: una factura pagada en tres plazos desiguales. **Un grupo por número solo
   se acepta si suma cero**, así que si el campo viniera sucio no cambia nada. Si no
@@ -549,7 +554,10 @@ eran.
 
 Di dónde ha quedado el fichero, cuántas cuentas lleva, y **para cada una
 cuántos grupos venían punteados de la contabilidad, cuántos añadió este
-papel y cuántos apuntes quedan pendientes**. Si alguna cuenta no verifica
+papel y cuántos apuntes quedan pendientes**. El listado del script se corta a 30
+cuentas, pero **la línea `TOTAL` del final va siempre**: cuentas, apuntes, grupos,
+sin cancelar, pendiente total y si todas verifican. Es la que se le da al auditor;
+no hace falta abrir el Excel para el agregado. Si alguna cuenta no verifica
 (columna VERIFICACION = REVISAR en la hoja Resumen), dilo antes que nada:
 ese papel no se entrega tal cual. Si hay descuadre del punteo previo,
 cuéntalo como lo que es: un posible error de punteo en la contabilidad del

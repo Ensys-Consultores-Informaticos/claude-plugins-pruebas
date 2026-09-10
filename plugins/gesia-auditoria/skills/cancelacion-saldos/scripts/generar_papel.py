@@ -287,8 +287,9 @@ def _hoja_criterios(ws, h: dict) -> None:
     cand = h.get("candidatas_documento") or []
     if len(cand) > 1:
         nota_doc += (" Habia " + str(len(cand)) + " columnas candidatas y se eligio la que mas "
-                     "grupos cierra a cero: "
-                     + " · ".join(f"{c} {z}/{g}" for c, g, z in cand) + ".")
+                     "grupos cierra a cero EN ESTE EXTRACTO: "
+                     + " · ".join((f"{c} vacia" if not t[3] else f"{c} {z}/{g}")
+                                  for t in cand for c, g, z in [t[:3]]) + ".")
     f = linea(f, "Numero de documento del paso 0",
               (str(fuente_doc) if fuente_doc else "ninguno"), nota_doc)
     f += 1
@@ -324,10 +325,15 @@ def _hoja_criterios(ws, h: dict) -> None:
     f = linea(f, "  sigue viva", h["aperturas_vivas"])
     f = linea(f, "  importe vivo", float(h["aperturas_importe_vivo"]))
     f = linea(f, "Aperturas NO identificadas", h["aperturas_no_identificadas"],
-              "varios apuntes el 1 de enero, o cuenta de un solo apunte: no se sabe cual "
-              "es la apertura, asi que el emparejamiento NO la ha intentado. No es que no "
-              "se haya podido cerrar, es que no se ha mirado")
+              "varios apuntes el 1 de enero: no se sabe cual es la apertura, asi que el "
+              "emparejamiento NO la ha intentado. No es que no se haya podido cerrar, es "
+              "que no se ha mirado")
     f = linea(f, "  importe", float(h["aperturas_importe_no_identificado"]))
+    f = linea(f, "Cuentas de un solo apunte (del 1 de enero)", h.get("cuentas_un_apunte", 0),
+              "No hay nada que cancelar: un unico movimiento vivo. Es lo normal en una "
+              "cuenta cuyo contrapunto esta en otro ejercicio o que se abrio con saldo y "
+              "no se ha movido. No es un frente abierto del emparejamiento.")
+    f = linea(f, "  importe", float(h.get("importe_un_apunte", 0.0)))
     f = linea(f, "Cuentas sin apertura detectada", h["cuentas_sin_apertura"],
               "Puede ser una cuenta abierta en el ejercicio, o que el diario no traiga "
               "el asiento de apertura. Si el saldo inicial deberia estar y no aparece, "
@@ -475,6 +481,18 @@ def main() -> int:
     if len(filas_resumen) > MAX_LISTA:
         print("  ... y " + str(len(filas_resumen) - MAX_LISTA)
               + " cuenta(s) mas: ver hoja Resumen")
+    # El agregado va SIEMPRE, y despues del corte: con 69 cuentas el listado se
+    # cortaba en la 30 y habia que abrir el Excel para saber el pendiente total y
+    # si todas verificaban (dos registros de ejecucion lo pidieron, 10/09/2026).
+    no_ok = [f for f in filas_resumen if not f["ok"]]
+    print("  TOTAL " + str(len(filas_resumen)) + " cuenta(s) | "
+          + str(sum(f["apuntes"] for f in filas_resumen)) + " apuntes | "
+          + str(sum(f["grupos_previos"] for f in filas_resumen)) + " grupos previos | "
+          + str(sum(f["grupos_nuevos"] for f in filas_resumen)) + " nuevos | "
+          + str(sum(f["sin_cancelar"] for f in filas_resumen)) + " sin cancelar | pendiente total "
+          + format(sum(f["pendiente"] for f in filas_resumen), ",.2f") + " € | verificacion: "
+          + ("todas OK" if not no_ok else str(len(no_ok)) + " REVISAR ("
+             + ", ".join(str(f["cuenta"]) for f in no_ok[:8]) + ("..." if len(no_ok) > 8 else "") + ")"))
 
     con_descuadre = [f for f in filas_resumen if abs(f["descuadre_previo"]) > 0.005]
     if con_descuadre:

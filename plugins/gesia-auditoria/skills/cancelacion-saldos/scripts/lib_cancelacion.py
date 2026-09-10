@@ -120,15 +120,17 @@ def _columnas_documento(columnas) -> list:
 
 
 def _puntuar_documento(df, col) -> tuple:
-    """(grupos de 2+ apuntes, cuantos suman cero) agrupando por CUENTA y por el
-    valor de la columna: la misma prueba que aplica el paso 2.0."""
+    """(grupos de 2+ apuntes, cuantos suman cero, apuntes con valor) agrupando por
+    CUENTA y por el valor de la columna: la misma prueba que aplica el paso 2.0.
+    El tercer numero distingue «columna vacia en este extracto» de «columna llena
+    que no cierra nada», que son diagnosticos distintos (registro del 10/09/2026)."""
     k = df[col].fillna("").astype(str).str.strip().replace({"0": "", "nan": "", "None": ""})
     d = df.assign(_K=k)[k != ""]
     if d.empty:
-        return 0, 0
+        return 0, 0, 0
     g = d.groupby(["CUENTA", "_K"])["SALDO"].agg(["size", "sum"])
     g = g[g["size"] >= 2]
-    return int(len(g)), int((g["sum"].abs() < TOL).sum())
+    return int(len(g)), int((g["sum"].abs() < TOL).sum()), int(len(d))
 
 
 def _columna_documento(columnas) -> str | None:
@@ -216,8 +218,10 @@ def cargar_extracto(ruta) -> pd.DataFrame:
     comparacion = []
     if len(candidatas) > 1:
         for c in candidatas:
-            grupos, cerrados = _puntuar_documento(df, c)
-            comparacion.append((c, grupos, cerrados))
+            grupos, cerrados, con_valor = _puntuar_documento(df, c)
+            comparacion.append((c, grupos, cerrados, con_valor))
+        # se mide sobre ESTE extracto: la misma columna puede estar llena en un grupo
+        # de cuentas y vacia en otro del mismo diario (medido el 10/09/2026)
         comparacion.sort(key=lambda t: (-t[2], -(t[2] / t[1] if t[1] else 0)))
         col_fra = comparacion[0][0]
     else:
@@ -287,7 +291,7 @@ def cargar_extracto(ruta) -> pd.DataFrame:
     # columna del diario o de un texto leido
     df.attrs["fuente_documento"] = fuente_documento
     df.attrs["fuente_fecha_doc"] = fuente_fecha_doc
-    df.attrs["candidatas_documento"] = comparacion   # [(columna, grupos, cerrados)], vacio si solo habia una
+    df.attrs["candidatas_documento"] = comparacion   # [(columna, grupos, cerrados, apuntes con valor)], vacio si solo habia una
     return df
 
 
@@ -813,6 +817,11 @@ def analizar_hallazgos(df: pd.DataFrame, por_cuenta: dict) -> dict:
     ctas_sin_apertura = 0
     ap_no_identificadas = 0
     ap_importe_no_ident = 0.0
+    # una cuenta de UN solo apunte del 1 de enero no tiene un problema de
+    # identificacion: no tiene nada que cancelar. Iba sumada con las anteriores y el
+    # auditor recibia un importe unico como si fuera un frente abierto (10/09/2026).
+    ctas_un_apunte = 0
+    importe_un_apunte = 0.0
     grupos_por_paso = {}
 
     for cuenta, (res, _info) in por_cuenta.items():
@@ -852,6 +861,9 @@ def analizar_hallazgos(df: pd.DataFrame, por_cuenta: dict) -> dict:
                 ap_vivas += 1
                 ap_importe_vivo = _round2(ap_importe_vivo
                                           + abs(res.loc[idx_ap, "SALDO"]))
+        elif parece_apertura and len(res) == 1:
+            ctas_un_apunte += 1
+            importe_un_apunte = _round2(importe_un_apunte + abs(primero["SALDO"]))
         elif parece_apertura:
             ap_no_identificadas += 1
             ap_importe_no_ident = _round2(ap_importe_no_ident
@@ -925,6 +937,8 @@ def analizar_hallazgos(df: pd.DataFrame, por_cuenta: dict) -> dict:
         "cuentas_sin_apertura": ctas_sin_apertura,
         "aperturas_no_identificadas": ap_no_identificadas,
         "aperturas_importe_no_identificado": ap_importe_no_ident,
+        "cuentas_un_apunte": ctas_un_apunte,
+        "importe_un_apunte": importe_un_apunte,
     }
 
 
