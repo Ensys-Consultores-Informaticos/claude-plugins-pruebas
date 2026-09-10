@@ -281,10 +281,11 @@ python "$SKILL/scripts/ejecutar_mum.py" \
 **nada lee el reloj**: el papel tiene que poder regenerarse idéntico.
 
 `--manifiesto` es lo que convierte la celda del fichero en **hipervínculo al documento**,
-con ruta absoluta. **Y si los scripts no comparten disco con el auditor —Cowork—, la ruta
-del contenedor no le sirve de nada**: pásale además `--carpeta-documentos` con la carpeta
-de los escaneos tal como la ve él, la misma que te dio en el paso 3, y el vínculo se rehace
-sobre ella. Sin ninguno de los dos, la celda queda como texto y el script lo dice: es
+con ruta absoluta. **Y si los scripts no ven la carpeta del auditor —porque corren en un
+contenedor—, la ruta que ellos manejan no le sirve de nada**: pásale además
+`--carpeta-documentos` con la carpeta de los escaneos tal como la ve él, la misma que te dio
+en el paso 3, y el vínculo se rehace sobre ella. Donde los scripts y el auditor comparten
+disco, no hace falta. Sin ninguno de los dos, la celda queda como texto y el script lo dice: es
 mejor sin vínculo que con un vínculo que no abre nada.
 
 Salida `2` → **para**: el contrato no se cumple —la población no tiene columna de importe,

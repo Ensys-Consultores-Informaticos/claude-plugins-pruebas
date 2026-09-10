@@ -42,6 +42,16 @@ de punteo previo (la columna Indice que traen muchos .smn):
            2.2b no puede con esto
   9999914  2.2c que NO cierra -- lo mismo sin la regularizacion: la apertura se
            queda pendiente y no se fuerza nada
+  9999915  SIN CONCEPTO -- el auditor decidio que ese texto no saliera de su
+           equipo (rama confidencialidad). Todo funciona igual, el papel no
+           lleva la columna, y los hallazgos por fecha de documento salen
+           como NO EVALUADOS, no como cero: calcularlos con la fecha contable
+           daria una cifra inflada con aspecto de hallazgo
+  9999916  DERIVADAS -- el extracto como lo exporta el MCP 1.11.0: sin CONCEPTO,
+           con NumeroEnConcepto y FechaEnConcepto. El numero hace de FACTURA
+           (con menor prioridad que una columna del diario), la fecha hace de
+           FECHA_DOC, los hallazgos por fecha SI se evaluan, y el papel lleva
+           FECHA DOC. y FACTURA, dice de donde salen, y el TOTAL cae bajo SALDO
 
 Por que hace falta: en una cuenta sin nada que cancelar, un emparejador
 roto y uno correcto pueden dar el mismo resultado (todo en INDICE 0). Que
@@ -61,6 +71,9 @@ from lib_cancelacion import (  # noqa: E402
     ORIGEN_CONTABLE,
     asignar_indices_cuenta,
     verificar_cuenta,
+    analizar_hallazgos,
+    cargar_extracto,
+    procesar_extracto,
 )
 
 
@@ -446,6 +459,31 @@ def main() -> int:
             print("  - " + f)
         return 1
 
+    # 9999915 -- sin CONCEPTO: nada se rompe y nada se degrada en silencio
+    sin_con = FIXTURES["9999913"].drop(columns=["CONCEPTO"]).copy()
+    sin_con["ASIENTO"] = [str(i) for i in range(1, len(sin_con) + 1)]
+    try:
+        res15, _ = asignar_indices_cuenta(sin_con)
+        emparejo = int(res15.loc[res15["CONCEPTO"] == "Apertura", "INDICE"].iloc[0]) if "CONCEPTO" in res15 else None
+    except KeyError as exc:
+        fallos.append("9999915: sin CONCEPTO el emparejamiento revienta con KeyError " + str(exc))
+        res15 = None
+    if res15 is not None:
+        # el mismo grupo de apertura que en el 9999913: el concepto no pintaba nada
+        ap15 = res15.sort_values("FECHA").iloc[0]
+        if int(ap15["INDICE"]) == 0 or int((res15["INDICE"] == ap15["INDICE"]).sum()) != 5:
+            fallos.append("9999915: sin CONCEPTO la apertura deberia cerrarse igual que en el 9999913")
+        else:
+            print("OK  9999915 (sin CONCEPTO): el emparejamiento da lo mismo, el concepto no decide")
+        h15 = analizar_hallazgos(sin_con, {"9999915": (res15, verificar_cuenta(res15))})
+        if h15.get("fecha_doc_disponible") is not False:
+            fallos.append("9999915: analizar_hallazgos tiene que decir que el concepto NO esta disponible")
+        elif h15["grupos_evaluados"] != 0 or h15["anomalos"] != 0:
+            fallos.append("9999915: sin concepto NO se puede evaluar ningun grupo por fecha de documento "
+                          "(se estaria usando la fecha contable)")
+        else:
+            print("OK  9999915 (sin CONCEPTO): los hallazgos por fecha de documento quedan SIN EVALUAR, no a cero")
+
     # -- el papel: las posiciones de columna se DERIVAN de la cabecera
     # Estaban escritas a mano -j == 5 para el saldo- y al insertar FACTURA el
     # formato de euros y el amarillo se quedaron una columna a la izquierda. Un
@@ -478,6 +516,27 @@ def main() -> int:
                        if c.fill and c.fill.patternType else None)
                 bien.append(str(rgb).endswith("FFFF00")
                             and c.number_format.startswith("#,##0.00"))
+        # y el mismo fixture SIN concepto: el papel no lleva la columna y la hoja de
+        # criterios dice NO EVALUADO donde antes contaba pagos anteriores a su factura
+        f3 = fx.drop(columns=["CONCEPTO"])
+        (tmp / "e2.json").write_text(f3.to_json(orient="records"), encoding="utf-8")
+        ruta2 = tmp / "p2.xlsx"
+        subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "generar_papel.py"),
+                        "--entrada", str(tmp / "e2.json"), "--salida", str(ruta2)],
+                       capture_output=True)
+        if not ruta2.exists():
+            fallos.append("9999915: el papel sin CONCEPTO no se ha podido generar")
+        else:
+            wb2 = load_workbook(ruta2)
+            cab2 = [wb2["9999913"].cell(row=4, column=j).value for j in range(1, 12)]
+            crit = " ".join(str(c.value) for row in wb2["Criterios y hallazgos"].iter_rows()
+                            for c in row if c.value)
+            if "CONCEPTO" in cab2:
+                fallos.append("9999915: el papel no debe llevar la columna CONCEPTO si el extracto no la trae")
+            elif "NO EVALUADO" not in crit:
+                fallos.append("9999915: la hoja de criterios tiene que decir NO EVALUADO, no ensenar ceros")
+            else:
+                print("OK  9999915 (sin CONCEPTO): el papel sale sin la columna y la hoja de criterios dice NO EVALUADO")
         if not ("ASIENTO" in cab and "FACTURA" in cab):
             fallos.append("el papel deberia traer ASIENTO y FACTURA cuando el extracto las trae")
         elif not (bien and all(bien)):
@@ -485,7 +544,61 @@ def main() -> int:
         else:
             print("OK  el papel: ASIENTO y FACTURA presentes, y el amarillo cae en SALDO")
 
-    print("\nTodo detectado. El emparejador ve los catorce casos y las verificaciones cuadran.")
+        # 9999916 -- las derivadas del MCP, de punta a punta
+        f16 = fx.drop(columns=["CONCEPTO"]).rename(columns={"FACTURA": "NumeroEnConcepto"})
+        # la factura viva del año lleva fecha de documento; los pagos y la apertura, no
+        f16["FechaEnConcepto"] = [("2024-05-20" if n == "10" else None) for n in f16["NumeroEnConcepto"]]
+        (tmp / "e16.json").write_text(f16.to_json(orient="records"), encoding="utf-8")
+        df16 = cargar_extracto(tmp / "e16.json")
+        if "FACTURA" not in df16.columns or df16.attrs.get("fuente_documento") != "NumeroEnConcepto":
+            fallos.append("9999916: NumeroEnConcepto tiene que hacer de FACTURA y decirlo en attrs")
+        elif "FECHA_DOC" not in df16.columns or df16.attrs.get("fuente_fecha_doc") != "FechaEnConcepto" \
+                or int(df16["FECHA_DOC"].notna().sum()) != 1:
+            fallos.append("9999916: FechaEnConcepto tiene que hacer de FECHA_DOC (una fila con fecha)")
+        elif "NumeroEnConcepto" in df16.columns or "FechaEnConcepto" in df16.columns:
+            fallos.append("9999916: las columnas de origen se normalizan y no se quedan duplicadas")
+        else:
+            print("OK  9999916 (derivadas): NumeroEnConcepto -> FACTURA y FechaEnConcepto -> FECHA_DOC, con su origen")
+            por16 = procesar_extracto(df16)
+            res16 = por16["9999913"][0]
+            ap16 = res16.sort_values("FECHA").iloc[0]
+            if int(ap16["INDICE"]) == 0 or int((res16["INDICE"] == ap16["INDICE"]).sum()) != 5:
+                fallos.append("9999916: con el numero derivado la apertura tiene que cerrarse como en el 9999913")
+            else:
+                print("OK  9999916 (derivadas): el paso 2.0 agrupa por el numero derivado igual que por NN_Factura")
+            h16 = analizar_hallazgos(df16, por16)
+            if not h16.get("fecha_doc_disponible") or h16.get("fuente_fecha_doc") != "FechaEnConcepto" \
+                    or h16.get("fuente_documento") != "NumeroEnConcepto" or h16["grupos_evaluados"] < 1:
+                fallos.append("9999916: los hallazgos por fecha SE EVALUAN con la fecha derivada, y dicen su origen: " + str(
+                    {k: h16.get(k) for k in ("fecha_doc_disponible", "fuente_fecha_doc", "fuente_documento", "grupos_evaluados")}))
+            else:
+                print("OK  9999916 (derivadas): los hallazgos por fecha de documento se evaluan sin el texto del concepto")
+            ruta16 = tmp / "p16.xlsx"
+            subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "generar_papel.py"),
+                            "--entrada", str(tmp / "e16.json"), "--salida", str(ruta16)],
+                           capture_output=True)
+            if not ruta16.exists():
+                fallos.append("9999916: el papel con las derivadas no se ha podido generar")
+            else:
+                wb16 = load_workbook(ruta16)
+                ws16 = wb16["9999913"]
+                cab16 = [ws16.cell(row=4, column=j).value for j in range(1, 14)]
+                crit16 = " ".join(str(c.value) for row in wb16["Criterios y hallazgos"].iter_rows()
+                                  for c in row if c.value)
+                # la fila de TOTAL es la siguiente a los datos: 6 apuntes desde la fila 5
+                j_saldo = cab16.index("SALDO") + 1
+                etq = ws16.cell(row=5 + len(f16), column=j_saldo - 1).value
+                tot = ws16.cell(row=5 + len(f16), column=j_saldo).value
+                if "FECHA DOC." not in cab16 or "FACTURA" not in cab16 or "CONCEPTO" in cab16:
+                    fallos.append("9999916: el papel tiene que llevar FECHA DOC. y FACTURA, y no CONCEPTO: " + str(cab16))
+                elif "NumeroEnConcepto" not in crit16 or "FechaEnConcepto" not in crit16:
+                    fallos.append("9999916: la hoja de criterios tiene que decir que numero y fecha vienen derivados por el MCP")
+                elif etq != "TOTAL" or not isinstance(tot, (int, float)):
+                    fallos.append("9999916: el TOTAL tiene que caer bajo SALDO, no en una posicion fija: " + str((etq, tot)))
+                else:
+                    print("OK  9999916 (derivadas): el papel lleva FECHA DOC. y FACTURA, dice su origen, y el TOTAL cae bajo SALDO")
+
+    print("\nTodo detectado. El emparejador ve los dieciseis casos y las verificaciones cuadran.")
     return 0
 
 

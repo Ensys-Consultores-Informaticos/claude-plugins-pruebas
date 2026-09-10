@@ -31,6 +31,14 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from lib_riesgos import (           # noqa: E402
+    SinObligatorios,
+    anio_master,
+    resolver_obligatorios,
+)
+
 # Campos que SI son catalogo. Se dejan fuera a proposito:
 #   Conclusion, Recomendacion  las escribe el auditor en su expediente
 #   FicheroVinculado1/2, ReferenciaPT  son del encargo, no del catalogo
@@ -101,6 +109,14 @@ def main() -> int:
     p.add_argument("--salida", required=True,
                    help="directorio de destino, normalmente el de trabajo")
     p.add_argument("--version", default="", help='etiqueta, p.ej. "Master 25"')
+    # Por el camino normal -el de --catalogo- aqui no llega la ruta del master, y
+    # el catalogo se quedaba SIN ORIGEN: version y origen vacios. Un catalogo
+    # anonimo no se puede contrastar con nada, y asi es como se llego a usar el
+    # master de 2021 en un encargo de 2025 sin que nada lo dijera.
+    p.add_argument("--master", default="",
+                   help="ruta o nombre del .gs3 del master, para dejar constancia "
+                        "de DE DONDE sale el catalogo. Con --catalogo es la unica "
+                        "forma de saberlo")
     p.add_argument("--puerto", type=int, default=None)
     args = p.parse_args()
 
@@ -181,9 +197,10 @@ def main() -> int:
 
     destino = Path(args.salida)
     destino.mkdir(parents=True, exist_ok=True)
+    de_donde = args.master or args.gs3
     catalogo = {
-        "version": args.version or Path(args.gs3).stem,
-        "origen": Path(args.gs3).name,
+        "version": args.version or Path(de_donde).stem,
+        "origen": Path(de_donde).name,
         "n": len(riesgos),
         "areas": sorted({r["area"] for r in riesgos}),
         "riesgos": riesgos,
@@ -225,6 +242,22 @@ def main() -> int:
     sin_nombre = sum(1 for r in riesgos if not r["area_nombre"])
     if sin_nombre:
         print("  AVISO: " + str(sin_nombre) + " riesgos sin nombre de area")
+
+    # De donde sale, y con que numero vienen aqui los dos obligatorios. Se imprime
+    # SIEMPRE: es el momento en que el auditor puede ver que ha cogido el master
+    # que no era, y el unico sitio donde el numero de esos dos riesgos aparece
+    # junto al fichero del que sale.
+    if not catalogo["version"]:
+        print("  AVISO: el catálogo no dice de qué máster sale. Pasa --master con "
+              "la ruta del .gs3 para que quede constancia en el papel de trabajo.")
+    else:
+        print("  máster        " + catalogo["version"]
+              + (" · año " + str(anio_master(catalogo)) if anio_master(catalogo) else ""))
+    try:
+        for r in resolver_obligatorios(catalogo):
+            print("  obligatorio   " + str(r["id"]) + " — " + r["nombre"])
+    except SinObligatorios as exc:
+        print("  AVISO: " + str(exc))
     return 0
 
 

@@ -59,7 +59,9 @@ Si la columna no existe, el emparejamiento parte de cero, como siempre.
 Se aplica cuenta por cuenta **sobre los apuntes sin puntear**, en este
 orden, y en cuanto uno resuelve toda la cuenta se para ahí:
 
-0. **Grupos por NÚMERO DE DOCUMENTO** (`NN_Factura`), y **solo si suman 0**.
+0. **Grupos por NÚMERO DE DOCUMENTO** (`NN_Factura` o, si el diario no trae esa
+   columna con ningún nombre, el número que el MCP deriva del concepto en local:
+   `NumeroEnConcepto`), y **solo si suman 0**.
    Es la clave con la que el auditor empareja a mano, y llega donde ningún
    criterio de importes puede: una factura de 2.743,70 muerta por tres pagos de
    914,48 / 914,48 / 914,74 a 30, 60 y 90 días. Los pagos no se parecen a la
@@ -125,8 +127,9 @@ aceptar una coincidencia de texto, y el criterio numérico —fecha e
 importe— ya resolvió sin ambigüedad el caso real usado para calibrar esto
 (una cuenta de clientes del expediente de calibración: 46 de 46 grupos
 correctos, incluida una apertura que solo cancela agrupando tres pagos del
-mismo día). CONCEPTO se conserva en el informe para que el auditor lo lea,
-no para que el algoritmo decida por él. **Los `NN_Cta*` tampoco se usan** para agrupar cuentas: ahí habría que *fiarse*
+mismo día). Del concepto solo se usan **el número y la fecha que el MCP extrae en local** —y el
+número, solo si el grupo suma cero—; el texto se conserva en el informe para que el
+auditor lo lea, si decidió que viajara, no para que el algoritmo decida por él. **Los `NN_Cta*` tampoco se usan** para agrupar cuentas: ahí habría que *fiarse*
 de ellos, y para eso están `Left(CUENTA, n)` y el nivel de auditoría.
 
 `NN_Factura` es el caso distinto, y conviene saber por qué: **su semántica no está
@@ -211,25 +214,59 @@ papel llevará una hoja por cada una, y el auditor tiene derecho a saber
 que va a recibir doscientas antes de que se generen—. Por debajo, sigue sin
 preguntar: ahí el trámite molesta más de lo que protege.
 
+**Y una pregunta más, siempre, antes de exportar nada.** El `CONCEPTO` de cada
+apunte es texto libre —nombres, matrículas, referencias— que el auditor lee en el
+papel. **Lo que el skill necesita de él no depende de la respuesta**: el número de
+factura y la fecha del documento que lleva escritos los extrae el MCP en local y
+viajan siempre en el extracto como `NumeroEnConcepto` y `FechaEnConcepto`, aunque el
+texto no viaje. Medido el 10/09/2026 en seis diarios reales: donde no hay `NN_Factura`
+—cuatro de siete expedientes— ese número cierra el 78–90 % de los grupos que forma. Lo
+único que se decide es si el **texto** sale del equipo, y eso lo decide el auditor, con
+esta frase y ninguna más:
+
+> *¿Quieres el concepto de cada apunte en el papel de trabajo? Ese texto libre —que
+> puede llevar nombres, matrículas o referencias— sale de tu equipo con el extracto: un
+> riesgo de confidencialidad pequeño, pero real. El número de factura y la fecha que
+> lleva escritos se usan igual, viaje o no.*
+
+Si dice que sí: `configurar(concepto = true)` **antes** de exportar, y el fichero llevará
+`CONCEPTO` además de las dos derivadas. Si dice que no: no hay nada que configurar; el
+MCP ya retiene el texto por defecto. Sin respuesta, **no se exporta**. No hay tercera
+opción ni valor por defecto: es una decisión de confidencialidad y es suya.
+
 ### Paso 2 — Exportar el extracto del diario
 
 **Primero mira qué columnas tiene este diario** — cambian de un `.smn` a
-otro y no se asume ninguna opcional:
+otro y no se asume ninguna opcional—, y hazlo **sin traer ningún apunte**:
 
 ```
-consultar_diario(sql = "SELECT TOP 1 * FROM Diario")
+columnas(fuente = "diario")
 ```
 
-Con eso decides el SELECT. Dos columnas opcionales, y las dos **se incluyen si
+Devuelve nombre y tipo de cada columna y ninguna fila. **No uses `SELECT TOP 1 *`
+para esto**: trae un apunte real del cliente —nombre, concepto, importe— al contexto,
+y el 10/09/2026 así entraron tres en una ejecución, incluida una apertura de seis
+cifras.
+
+Con eso decides el SELECT. Tres columnas opcionales, y las tres **se incluyen si
 existen**; si no, no se piden — pedir una que no está da el error de Access
 *«Pocos parámetros»*, que no dice cuál falta:
 
 - **`Indice`**, el punteo previo de la contabilidad. El skill lo respeta y lo
   completa.
-- **`NN_Factura`**, el número de documento. Es la clave con la que el auditor
+- **La columna del número de documento**, que **no tiene un nombre fijo**:
+  `NN_Factura`, `NN_NumFactura`, `Factura`, `Documento`… Pide la que `columnas()`
+  enseñe con «factura» o «documento» en el nombre. Es la clave con la que el auditor
   empareja a mano, y con ella el skill cancela lo que ningún criterio de importes
   alcanza: una factura pagada en tres plazos desiguales. **Un grupo por número solo
-  se acepta si suma cero**, así que si el campo viniera sucio no cambia nada.
+  se acepta si suma cero**, así que si el campo viniera sucio no cambia nada. Si no
+  existe con ningún nombre, no pasa nada: el MCP deriva `NumeroEnConcepto` y el skill
+  lo usa en su lugar.
+- **`CONCEPTO`**, que casi siempre está. **Pídelo siempre que exista, diga lo que
+  diga el auditor**: el MCP no lo exporta como texto —salvo que se haya autorizado en
+  el paso 1— sino convertido en `NumeroEnConcepto` y `FechaEnConcepto`, que es lo que
+  el skill necesita. Si no lo pides, el papel se queda sin fecha de documento y los
+  hallazgos por fecha no se evalúan.
 
 **Los demás `NN_*` no se piden nunca**, y `NN_Factura` no es una excepción a esa
 regla sino a su motivo: los `NN_Cta*` se descartan porque habría que *fiarse* de
@@ -257,8 +294,10 @@ exportar_consulta(
   ruta = "<TEMP>/gesia-cancelacion/extracto.csv")
 ```
 
-**Ese SELECT es el mínimo seguro: a él se le AÑADEN `Indice` y `NN_Factura`, una a
-una y solo si el `SELECT TOP 1 *` de arriba las ha mostrado.** Van fuera del ejemplo
+**Ese SELECT es el mínimo seguro: a él se le AÑADEN `Indice` y la columna del número
+de documento, una a una y solo si `columnas()` las ha mostrado.** `CONCEPTO` va dentro
+del ejemplo porque casi siempre existe; si `columnas()` no lo enseña, quítalo. Las otras
+van fuera del ejemplo
 a propósito, porque el ejemplo es lo que se copia: pedir una columna que no está
 aborta la consulta con el «Pocos parámetros» de Access, que no dice cuál falta. Pasó
 el 08/09/2026 en este mismo diario, que trae `NN_Factura` pero no `Indice`.
@@ -281,7 +320,8 @@ grupos de cuentas en la misma sesión: nada de `extracto_clientes.csv` ni
 variantes por ejecución. `exportar_consulta` sobrescribe avisando, así que
 el residuo queda en un fichero en vez de acumularse.
 
-### Paso 2b — En Cowork, subir el extracto (en local no aplica)
+<!-- solo-cowork:export -->
+#### En Cowork: subir el extracto antes de seguir (en local no aplica)
 
 **Quien exporta y quien calcula no son la misma máquina, y esto se pasa por
 alto con facilidad.** El MCP corre en el equipo del auditor y escribe ahí;
@@ -321,9 +361,24 @@ del sistema y se lee de ahí.
 EXTRACTO="<TEMP>/gesia-cancelacion/extracto.csv"
 ```
 
-**Comprueba que el fichero se lee antes de seguir** —`head -2 "$EXTRACTO"`
+**Comprueba que el fichero se lee antes de seguir** —`head -1 "$EXTRACTO"` y `wc -l`, nunca `head -2`
 basta—. Es lo que separa un fallo evidente de exportar dos veces sin
 entender por qué la primera no valía, que es lo que pasó el 27/08/2026.
+<!-- /solo-cowork -->
+
+### Paso 2b — Comprobar que el extracto se lee
+
+```bash
+EXTRACTO="<TEMP>/gesia-cancelacion/extracto.csv"
+```
+
+**Comprueba que el fichero se lee antes de seguir**, y hazlo **sin traer ningún apunte al
+contexto**: `head -1 "$EXTRACTO"` enseña la cabecera —las columnas que de verdad han
+venido— y `wc -l "$EXTRACTO"` cuántas filas hay. Con eso basta. **No hagas `head -2` ni
+`head -3`**: cada línea de más es un apunte real del cliente —nombre, concepto, importe—
+que se queda en la transcripción, y el 08/09/2026 así entraron dos, incluida una apertura
+de seis cifras. Es lo que separa un fallo evidente de exportar dos veces sin entender por
+qué la primera no valía, que es lo que pasó el 27/08/2026.
 
 ### Paso 2c — Reconocer el extracto y preguntar (no te lo saltes)
 
@@ -342,19 +397,32 @@ No escribe ningún fichero. Dice qué columnas hay, **cuánto cancelaría cada s
 sobre este cliente**, cuántas aperturas se quedarían sin cerrar y con qué importe, qué
 cuentas se atascan, y los grupos que se quedan a un céntimo de cuadrar.
 
-**Y termina con las preguntas que hay que hacerle al auditor**, que son solo las que el
-script no puede contestar solo. Trasládaselas y **espera respuesta**: lo que se mide no se
-pregunta, y lo que se pregunta cambia el resultado.
+**Y termina con una lista numerada de PREGUNTAS AL AUDITOR.** Esa lista es la buena:
+son las que el script no puede contestar solo, y ya vienen redactadas con la cuenta y el
+importe de los que hablan.
 
-- **Si falta el número de documento**, pregunta si el diario lo trae con otro nombre. Es la
-  señal que más cancela.
-- **Si quedan aperturas sin cerrar**, pregunta por el mayor del ejercicio anterior. Matar
-  la apertura es lo que más vale del procedimiento.
-- **Si hay grupos que se quedan en céntimos**, pregunta si se pueden barrer y con qué
-  umbral. Es materialidad y la decide el auditor: por defecto se quedan pendientes, y de
-  momento el skill **no** sabe barrerlas —si dice que sí, dilo al entregar como limitación—.
-- **Pregunta siempre cómo paga o cobra el cliente.** Plazos, remesas, confirming, pagos
-  parciales.
+**Pásalas TAL CUAL: todas, con su número, sin resumirlas y sin convertir ninguna en una
+afirmación.** Y luego **espera respuesta**. Medido el 08/09/2026 en ChatGPT Cowork: el
+modelo reescribió el bloque a su manera y se dejó una pregunta entera por el camino —la del
+número de documento reutilizado entre ejercicios— y convirtió la de la apertura en un dato
+informativo, así que nadie preguntó por el mayor del ejercicio anterior. La lista del script
+crece y cambia con lo que encuentra; una lista paralela escrita aquí se queda atrasada.
+
+Lo que cambia cada respuesta, para que sepas qué hacer con ella:
+
+- **El número de documento con otro nombre** → se rehace el `SELECT` del paso 2 incluyendo
+  esa columna y se vuelve a reconocer. Es la señal que más cancela.
+- **El mayor del ejercicio anterior** → todavía no se usa: apúntalo y dilo al entregar. La
+  apertura es lo que más vale del procedimiento, así que la respuesta interesa aunque hoy
+  no se pueda aprovechar.
+- **Barrer los céntimos** → el skill **no sabe hacerlo todavía**. Si dice que sí, los grupos
+  se quedan pendientes igual y **se cuenta como limitación al entregar**, con el importe.
+- **Cómo paga o cobra el cliente** → confirma o desmiente lo que ya se ve en los tamaños de
+  grupo del reconocimiento. Si dice algo que el dato no muestra —remesas, confirming—, dilo
+  al entregar: es donde el papel se queda corto.
+- **El número reutilizado entre ejercicios** → si dice que sí, avísalo al entregar: los
+  grupos por documento siguen exigiendo suma cero, así que no se inventa nada, pero conviene
+  que lo sepa.
 
 Lo que responda **no manda sobre la aritmética**: una pista del auditor propone por dónde
 sumar, y el grupo se acepta solo si suma cero. Por eso preguntar no tiene riesgo.
@@ -375,10 +443,16 @@ importes que no se interpretan— y **no se ha escrito nada**.
 Salida `1` → el papel **sí está escrito**, pero hay avisos: grupos del punteo
 previo que no suman 0, cuentas muy grandes donde el paso 4 del algoritmo se
 queda corto, cuentas con un solo signo donde no hay nada que cancelar, CONCEPTO
-vacío que hace el papel menos legible. **Léelos y cuéntalos al entregar**, no
+vacío que hace el papel menos legible. Que el extracto no traiga el texto de
+`CONCEPTO` **no es un aviso**: es lo normal, y el papel lleva en su lugar `FECHA DOC.`
+y `FACTURA` derivadas. El aviso A01 salta solo si tampoco trae `FechaEnConcepto`
+—porque el SELECT no pidió `CONCEPTO`—: entonces **los hallazgos por fecha de
+documento y el plazo de pago quedan sin evaluar** —la hoja de criterios lo dice—;
+**cuéntalo al entregar**, y la próxima vez pide `CONCEPTO`. **Léelos y cuéntalos al entregar**, no
 los escondas. La línea C05 dice si el diario trae punteo previo y cuánto: úsala
 al explicar el resultado.
 
+<!-- solo-cowork:entrega -->
 **En Cowork el script escribe en el sandbox, no en el expediente**, así que
 la ruta de destino no se cumple sola: hay que bajar el fichero. Se envía con
 `SendUserFile`, que devuelve un `file_uuid`, y con `device_commit_files` se
@@ -391,6 +465,7 @@ device_commit_files → "<expediente>/InformesGesia/CancelacionSaldos/<PAPEL>"
 En la máquina del auditor esto no hace falta: pásale directamente a
 `--salida` la ruta del expediente y el script escribe ahí, creando el árbol
 si no existe.
+<!-- /solo-cowork -->
 
 **Si el expediente está en OneDrive, el entorno puede rechazar la escritura antes
 de ejecutar nada** y pedir autorización expresa para escribir datos contables ahí.
@@ -426,15 +501,17 @@ pagos, y **no se presupone el signo** —en una cuenta de proveedor la factura
 es un abono y en una de cliente un cargo—. Se deduce en dos pasos: primero por
 **estructura**, con el signo de la apertura, que arrastra las facturas
 pendientes del ejercicio anterior y por tanto lleva el suyo; y si la cuenta no
-tiene apertura y cierra a cero, como respaldo, mirando qué lado trae fecha en
-el concepto. Si ninguno de los dos decide, **el grupo no se evalúa y la hoja lo
+tiene apertura y cierra a cero, como respaldo, mirando qué lado trae fecha de
+documento. Si ninguno de los dos decide, **el grupo no se evalúa y la hoja lo
 dice**: un cero ahí significaría «no hay hallazgos» cuando lo cierto sería «no
 se ha mirado».
 
-Esa fecha del concepto se usa **solo para informar**. El emparejamiento sigue
-trabajando con la fecha contable: hacerlo depender de un campo de texto libre
-sería frágil, y hay facturas que no lo traen —la hoja dice qué porcentaje, para
-que se sepa cuándo el recuento vale menos—.
+Esa fecha del documento **llega ya extraída por el MCP** (`FechaEnConcepto`): el
+texto del concepto no hace falta para esto, y el papel la enseña en la columna
+`FECHA DOC.`. Se usa **solo para informar**. El emparejamiento sigue trabajando con
+la fecha contable: hacerlo depender de un campo de texto libre sería frágil, y hay
+facturas que no lo traen —la hoja dice qué porcentaje, para que se sepa cuándo el
+recuento vale menos—.
 
 Cómo se lee el papel, por si el auditor pregunta: las hojas van en **orden
 cronológico** con autofiltro en la cabecera, y solo hay dos colores —**gris**
@@ -487,7 +564,9 @@ Borra tú el directorio de trabajo aparte, si creaste uno.
 | Situación | Qué sale |
 |---|---|
 | Sin diario importado | **para.** No hay apuntes que cancelar |
-| Extracto sin FECHA, CUENTA, NOMBRE o CONCEPTO | **para.** Faltan columnas obligatorias |
+| Extracto sin FECHA, CUENTA o NOMBRE | **para.** Faltan columnas obligatorias |
+| Extracto sin CONCEPTO pero con `FechaEnConcepto` y `NumeroEnConcepto` | sigue: es lo normal. El papel va sin el texto y con `FECHA DOC.` y `FACTURA` derivadas; la hoja de criterios dice de dónde salen |
+| Extracto sin fecha de documento (ni `FechaEnConcepto` ni CONCEPTO) | sigue: los hallazgos por fecha de documento quedan sin evaluar; A01 lo dice y se cuenta al entregar |
 | FECHA o SALDO no interpretables | **para**, y dice cuántos apuntes |
 | El diario no trae columna `Indice` | sigue: el emparejamiento parte de cero (C05 lo dice) |
 | Grupo del punteo previo que no suma 0 | sigue: se respeta, se avisa (A04) y el papel lo lista como descuadre del punteo contable |

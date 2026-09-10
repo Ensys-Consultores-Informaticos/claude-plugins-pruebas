@@ -35,9 +35,46 @@ EJERCICIOS = 5              # SaldoAuditoria1..5
 MIN_RIESGOS = 5
 MAX_RIESGOS = 10
 
-# Van siempre, digan lo que digan las cifras. Son los dos riesgos que la NIA 315
-# presume en todo encargo.
-OBLIGATORIOS = (18, 27)
+# Van siempre, digan lo que digan las cifras: son los dos riesgos que la NIA-ES
+# 240 presume en todo encargo. Se guardan por NOMBRE, y no por numero, a
+# proposito.
+#
+# `IdRiesgo` NO identifica un riesgo: es la numeracion interna del fichero que se
+# esta leyendo, y cambia de un master a otro. Medido el 04/09/2026 sobre los dos
+# masters de la firma:
+#
+#     riesgo                            Master 25 (106)   Master 21 (100)
+#     Integridad de las ventas                18                97
+#     Elusion de controles                    27                28
+#
+# Y en un expediente la tabla viene renumerada desde 1 con los pocos riesgos que
+# el auditor ya eligio para ESE encargo: 6 en un caso real.
+#
+# Hasta el 04/09/2026 aqui habia `OBLIGATORIOS = (18, 27)`. Acierta contra el
+# master 25 y FALLA EN SILENCIO contra cualquier otro: contra el master 21 mete
+# "Perdida de la concesion administrativa" y "Obsolescencia del producto en
+# catalogo" rotulados como de inclusion obligatoria por la NIA-ES 240, y deja
+# fuera los dos que si lo son. La validacion pasaba limpia porque comprobaba que
+# los numeros estuvieran en el catalogo, no que riesgo era cada numero. Lo
+# descubrio una ejecucion real contra el master 21.
+#
+# Es el mismo fallo que `CodigoReferencia` (mejora 1 de docs/mejoras-mcp.md): un
+# codigo que parece estable entre ficheros y no lo es.
+#
+# Se busca por un TROZO del nombre y no por el nombre entero, para que un cambio
+# de parentesis no rompa la resolucion. Los dos trozos son unicos en los dos
+# masters medidos.
+CLAVES_OBLIGATORIOS = (
+    "integridad de las ventas",
+    "elusion de controles por la direccion",
+)
+
+# El año del master, para avisar si no es el del ejercicio auditado. Se escriben
+# con [0-9] y no con \d a proposito: estos patrones han viajado por heredocs y
+# por ficheros de skill, y una barra invertida perdida por el camino convierte el
+# patron en literal sin dar error.
+ANIO_LARGO = r"(?:19|20)[0-9]{2}"
+ANIO_CORTO = r"(?<![0-9])([0-9]{2})(?![0-9])"
 
 # Si casi todo viene a cero, el expediente no tiene cifras cargadas y cualquier
 # analisis seria inventado.
@@ -177,6 +214,79 @@ def cargar_catalogo(ruta=None) -> dict:
     datos = json.loads(Path(ruta).read_text(encoding="utf-8"))
     datos["por_id"] = {r["id"]: r for r in datos["riesgos"]}
     return datos
+
+
+class SinObligatorios(RuntimeError):
+    """El catalogo no permite resolver los dos riesgos obligatorios.
+
+    Se aborta a proposito en vez de seguir con lo que haya: un informe al que le
+    falta la elusion de controles es peor que un informe que no se genera.
+    """
+
+
+def resolver_obligatorios(catalogo: dict) -> list:
+    """Los dos riesgos obligatorios TAL COMO ESTAN EN ESTE catalogo.
+
+    Devuelve los riesgos enteros, en el orden de CLAVES_OBLIGATORIOS, con el id
+    que tienen en el master que se acaba de leer. Nunca un numero fijo: ver el
+    comentario de CLAVES_OBLIGATORIOS.
+    """
+    riesgos = catalogo.get("riesgos") or []
+    de_donde = catalogo.get("version") or catalogo.get("origen") or "sin identificar"
+    hallados, problemas = [], []
+    for clave in CLAVES_OBLIGATORIOS:
+        casan = [r for r in riesgos if clave in sin_tildes(r.get("nombre", ""))]
+        if len(casan) == 1:
+            hallados.append(casan[0])
+        elif not casan:
+            problemas.append("ningún riesgo del catálogo se llama «" + clave + "»")
+        else:
+            problemas.append(
+                str(len(casan)) + " riesgos se llaman «" + clave + "»: "
+                + ", ".join(str(r["id"]) + " " + r["nombre"] for r in casan))
+    if problemas:
+        raise SinObligatorios(
+            "No se pueden resolver los dos riesgos de inclusión obligatoria en el "
+            "catálogo leído (" + de_donde + ", " + str(len(riesgos)) + " riesgos): "
+            + " · ".join(problemas)
+            + ". Comprueba que el máster indicado es el que lleva los riesgos: el "
+              "fichero suele llamarse «CON RIESGOS» y trae alrededor de cien. No se "
+              "sigue adelante, porque un informe sin estos dos riesgos no vale.")
+    return hallados
+
+
+def ids_obligatorios(catalogo: dict) -> tuple:
+    """Solo los ids, para comparar contra la seleccion."""
+    return tuple(r["id"] for r in resolver_obligatorios(catalogo))
+
+
+def anio_master(catalogo: dict):
+    """El ejercicio del master, deducido de su nombre. None si no se ve.
+
+    Sirve para avisar de que se esta usando un catalogo de otro año, que es como
+    se llego a leer el master de 2021 en un encargo de 2025.
+    """
+    texto = " ".join(str(catalogo.get(c, "")) for c in ("version", "origen"))
+    m = re.search(ANIO_LARGO, texto)
+    if m:
+        return int(m.group(0))
+    m = re.search(ANIO_CORTO, texto)
+    return 2000 + int(m.group(1)) if m else None
+
+
+def aviso_master(catalogo: dict, ejercicio=None):
+    """Texto de aviso si el master no parece el del ejercicio auditado."""
+    anio = anio_master(catalogo)
+    try:
+        ejercicio = int(str(ejercicio)[:4])
+    except (TypeError, ValueError):
+        ejercicio = None
+    if not anio or not ejercicio or anio == ejercicio:
+        return None
+    return ("el catálogo es del máster de " + str(anio) + " y el ejercicio auditado "
+            "es " + str(ejercicio) + ". Los riesgos, su numeración y sus "
+            "procedimientos cambian de un máster a otro: comprueba que es el máster "
+            "que quieres antes de firmar el papel.")
 
 
 def riesgo_legible(r: dict, con_procedimientos: bool = False) -> dict:

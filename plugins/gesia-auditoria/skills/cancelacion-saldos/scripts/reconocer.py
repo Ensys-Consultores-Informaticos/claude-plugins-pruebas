@@ -55,6 +55,11 @@ def reconocer(df) -> dict:
             "numero_documento": tiene_fra,
             "asiento": "ASIENTO" in df.columns,
             "concepto": "CONCEPTO" in df.columns,
+            # de donde sale cada cosa: columna del diario, o derivado del concepto
+            # en local por el MCP (que es lo normal desde la 1.11.0)
+            "fuente_documento": df.attrs.get("fuente_documento"),
+            "fecha_documento": bool("FECHA_DOC" in df.columns and df["FECHA_DOC"].notna().any()),
+            "fuente_fecha_doc": df.attrs.get("fuente_fecha_doc"),
         },
         "sin_documento": int((df["FACTURA"] == "").sum()) if tiene_fra else None,
         "cuentas_detalle": [],
@@ -147,8 +152,14 @@ def _informe(info: dict) -> list[str]:
         "  COLUMNAS OPCIONALES:",
         f"    punteo previo (Indice) ....... {'SI' if cols['punteo_previo'] else 'NO'}",
         f"    numero de documento .......... {'SI' if cols['numero_documento'] else 'NO'}"
-        + (f" ({info['sin_documento']} apuntes sin numero)"
+        + ((" (derivado del concepto por el MCP, NumeroEnConcepto; "
+            if str(cols.get("fuente_documento") or "").lower() == "numeroenconcepto"
+            else f" (columna {cols.get('fuente_documento')}; ")
+           + f"{info['sin_documento']} apuntes sin numero)"
            if cols["numero_documento"] else "  <-- SIN ESTO EL RESULTADO ES MUCHO PEOR"),
+        f"    fecha de documento ........... {'SI' if cols['fecha_documento'] else 'NO'}"
+        + (f" ({'derivada por el MCP, FechaEnConcepto' if cols.get('fuente_fecha_doc') == 'FechaEnConcepto' else 'leida del concepto'})"
+           if cols["fecha_documento"] else ""),
         f"    asiento ...................... {'SI' if cols['asiento'] else 'NO'}",
         "",
         "  LO QUE SE CANCELARIA, medido sobre este extracto:",
@@ -188,7 +199,9 @@ def _informe(info: dict) -> list[str]:
     P = []
     if not cols["numero_documento"]:
         P.append("¿El diario del cliente trae numero de factura o de documento? Si existe con "
-                 "otro nombre, dime cual: es la señal que mas cancela y el extracto no la trae.")
+                 "otro nombre, dime cual: es la señal que mas cancela y el extracto no la trae. "
+                 "Y si va escrito en el concepto, el MCP lo deriva solo: basta pedir CONCEPTO "
+                 "en el SELECT del extracto (el texto no viaja, el numero si).")
     if r["aperturas_abiertas"]:
         # con la cuenta y el nombre: sin eso el auditor no puede ir a buscar el
         # mayor de nada, que es justo lo que se le esta pidiendo
@@ -216,7 +229,14 @@ def _informe(info: dict) -> list[str]:
         P.append("¿El numero de documento se reutiliza entre ejercicios? Si se reutiliza, hay "
                  "que exigir ademas una ventana de fechas.")
 
-    L += ["", "  PREGUNTAS AL AUDITOR antes de procesar:"]
+    # El aviso va aqui y no solo en el SKILL.md porque esto es lo ultimo que el
+    # modelo lee antes de escribir su mensaje. El 08/09/2026, en ChatGPT Cowork,
+    # reescribio el bloque a su manera y perdio una pregunta entera.
+    L += ["",
+          "  PREGUNTAS AL AUDITOR antes de procesar.",
+          "  TRASLADALAS TAL CUAL, TODAS Y CON SU NUMERO: no las resumas, no las juntes",
+          "  y no conviertas ninguna en una afirmacion. Luego espera respuesta.",
+          ""]
     L += [f"    {i}. {q}" for i, q in enumerate(P, start=1)]
     if info["casi_cuadran"]:
         L += ["", "  los grupos que se quedan a un centimo:"]

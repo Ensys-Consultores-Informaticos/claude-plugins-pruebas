@@ -25,9 +25,10 @@ from docx.shared import Cm, Pt
 from lib_riesgos import (
     CONCENTRACION,
     EJERCICIOS_PERDIDAS,
-    OBLIGATORIOS,
     VARIACION,
+    SinObligatorios,
     cargar_catalogo,
+    resolver_obligatorios,
     riesgo_legible,
     salida_utf8,
 )
@@ -174,6 +175,16 @@ def main() -> int:
     catalogo = cargar_catalogo(args.catalogo)
     por_id = catalogo["por_id"]
 
+    # Por nombre, contra este catalogo: el numero de los dos obligatorios es la
+    # numeracion interna de cada master. Si no se resuelven, no hay informe: uno
+    # que rotula como obligatorio el riesgo que no es, es peor que ninguno.
+    try:
+        obligatorios = resolver_obligatorios(catalogo)
+    except SinObligatorios as exc:
+        print("ERROR: " + str(exc))
+        return 2
+    ids_obligatorios = [r["id"] for r in obligatorios]
+
     entidad = analisis.get("entidad", {})
     como_se_llama = entidad.get("denominacion_resultados", "cuenta de pérdidas y ganancias")
 
@@ -249,10 +260,15 @@ def main() -> int:
                  + " %, epígrafes que concentran el " + str(int(CONCENTRACION * 100))
                  + " % o más de su masa patrimonial, y pérdidas en "
                  + str(EJERCICIOS_PERDIDAS) + " o más de los cinco ejercicios.")
+    # Los obligatorios se nombran, y su numero se da entre parentesis y como lo
+    # que es: el del catalogo de ESTE master. Escrito solo con el numero, el
+    # parrafo no se puede comprobar contra otro master.
     parrafo(doc, "Los riesgos se han seleccionado del catálogo de riesgos del máster "
-                 "de Gesia; no se ha redactado ninguno nuevo. Los riesgos "
-                 + " y ".join(str(i) for i in OBLIGATORIOS) + " se incluyen siempre, "
-                 "con independencia de las cifras.")
+                 "de Gesia (" + (catalogo.get("version") or "sin identificar")
+                 + "); no se ha redactado ninguno nuevo. Se incluyen siempre, con "
+                   "independencia de las cifras, "
+                 + " y ".join("«" + r["nombre"] + "» (nº " + str(r["id"]) + " en este "
+                              "catálogo)" for r in obligatorios) + ".")
 
     # ── Lo que dicen las cifras ───────────────────────────────────────────────
     doc.add_heading("Hechos observados", level=1)
@@ -375,7 +391,7 @@ def main() -> int:
             ("Referencia", leg["referencia"] or "—"),
         ]
         ev = r.get("evidencia") or {}
-        if i in OBLIGATORIOS and not ev:
+        if i in ids_obligatorios and not ev:
             detalle.append(("Motivo de inclusión",
                             "Riesgo de inclusión obligatoria en todo encargo"))
         elif ev.get("ratio") or ev.get("elemento"):

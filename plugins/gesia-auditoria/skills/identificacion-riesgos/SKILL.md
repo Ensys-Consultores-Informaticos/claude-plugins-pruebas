@@ -44,9 +44,27 @@ esto no es una recomendación: `validar_seleccion.py` comprueba que cada id exis
 y que el nombre es **literalmente** el del catálogo, y aborta si no. Un nombre
 «casi igual» en un papel de trabajo es un nombre distinto.
 
-**2. Dos riesgos van siempre**, digan lo que digan las cifras: el **18 ·
-Integridad de las ventas (fraude)** y el **27 · Elusión de controles por la
-dirección (por sesgo o fraude)**. Son los que la norma presume en todo encargo.
+**2. Dos riesgos van siempre**, digan lo que digan las cifras: **Integridad de las
+ventas (fraude)** y **Elusión de controles por la dirección (por sesgo o fraude)**.
+Son los que la NIA-ES 240 presume en todo encargo.
+
+**Búscalos por el nombre, nunca por el número.** `IdRiesgo` es la numeración
+interna del fichero que estés leyendo, no la identidad del riesgo, y cambia de un
+máster a otro. Medido el 04/09/2026:
+
+| Riesgo | Máster 25 (106) | Máster 21 (100) |
+|---|---|---|
+| Integridad de las ventas (fraude) | 18 | 97 |
+| Elusión de controles por la dirección | 27 | 28 |
+
+Y en un expediente la tabla viene renumerada desde 1 con los pocos riesgos que el
+auditor ya eligió. Los scripts los resuelven solos por el nombre y **te dicen con
+qué número salen en el catálogo que has cargado**: usa ese número y no el de
+ningún ejemplo. Esto no es un detalle de estilo. Con el número fijo, una ejecución
+real contra el máster 21 metió en el informe «Pérdida de la concesión
+administrativa» y «Obsolescencia del producto en catálogo» rotulados como de
+inclusión obligatoria por la NIA-ES 240, dejó fuera los dos que sí lo son, y la
+validación pasó limpia.
 
 **3. El número es orientativo y no se rellena.** Si las cifras solo justifican
 seis riesgos, se proponen seis y el informe lo dice. Meter cuatro más sin epígrafe
@@ -173,12 +191,18 @@ Luego se normaliza al directorio de trabajo:
 
 ```bash
 python "$SKILL/scripts/extraer_catalogo.py" \
-    --catalogo "$TMPR/catalogo.json" --salida "$TRABAJO"
+    --catalogo "$TMPR/catalogo.json" --salida "$TRABAJO" \
+    --master "<ruta del máster CON RIESGOS>"
 ```
 
-Eso deja `$TRABAJO/riesgos.json` y `$TRABAJO/indice.md`. **Comprueba el recuento
-que imprime**: si son muchos menos de 100, el máster indicado puede no ser el que
-lleva los riesgos.
+`--master` no lee el fichero: solo deja escrito en el catálogo **de dónde sale**,
+porque por este camino el script no lo sabe. Sin él, el papel de trabajo no dice
+con qué máster se hizo y el aviso de máster desfasado no puede funcionar.
+
+Eso deja `$TRABAJO/riesgos.json` y `$TRABAJO/indice.md`. **Lee las tres últimas
+líneas que imprime**: el recuento, el máster del que sale y con qué número
+aparecen en él los dos riesgos obligatorios. Si el recuento es muy inferior a
+cien, el máster indicado no es el que lleva los riesgos.
 
 Por qué se lee y no viaja empaquetado, que era como estaba hasta el 26/08/2026:
 
@@ -234,7 +258,14 @@ Dos cosas que conviene saber de lo que llega:
   de comercio salía a −625,26—. Eso no es un defecto: es la señal que se busca.
 
 Los ejercicios y su orden salen de `Auditorias`: **el `CodigoAuditoria` es un
-orden interno, no un año.**
+orden interno, no un año.** La columna del año se llama `Año`, con eñe y con
+tilde, así que va entre corchetes. Es esta consulta y no otra —`Ejercicio` no
+existe y el error que devuelve Gesia, «No se han especificado valores para algunos
+de los parámetros requeridos», no dice cuál es la columna que falta—:
+
+```sql
+SELECT CodigoAuditoria, [Año], FechaAuditoria FROM Auditorias ORDER BY CodigoAuditoria
+```
 
 De la revisión analítica, cuatro cosas:
 
@@ -402,6 +433,9 @@ mapa epígrafe→área en el expediente, y el script no lo inventa a propósito.
 
 Escribe `$TRABAJO/seleccion.json`:
 
+Los `id` de este ejemplo son los del máster 25. **Coge los tuyos del índice y de
+lo que imprime `extraer_catalogo.py`**, que no tienen por qué coincidir:
+
 ```json
 {"riesgos": [
   {"id": 18, "nombre": "Integridad de las ventas (fraude)",
@@ -432,6 +466,8 @@ las fichas de los candidatos:
 python "$SKILL/scripts/mostrar_riesgos.py" --catalogo "$TRABAJO/riesgos.json"     --ids 18,27,33,80
 ```
 
+(Esos ids son de un máster concreto: pon los del índice que acabas de generar.)
+
 Saca área, afirmaciones, calificación, referencia y descripción completa de cada
 uno, y avisa si algún id no existe — mejor verlo aquí que cuando el validador
 aborte. Con `--area H` los saca todos los de un área y con `--procedimientos`
@@ -446,11 +482,20 @@ se usa el del catálogo; si lo pones distinto, el validador aborta.
 python "$SKILL/scripts/validar_seleccion.py" \
     --seleccion "$TRABAJO/seleccion.json" \
     --analisis "$TRABAJO/analisis.json" \
-    --catalogo "$TRABAJO/riesgos.json"
+    --catalogo "$TRABAJO/riesgos.json" \
+    --ejercicio 2025
 ```
 
 **`--catalogo` es obligatorio y sin él el script aborta**: el catálogo ya no viaja
 dentro del plugin, sale del máster. Es el mismo `riesgos.json` del paso 2.
+
+`--ejercicio` es el año auditado, el que sacaste de `Auditorias`. Solo sirve para
+avisar de que el catálogo es de un máster de otro año, que es de las cosas que no
+se ven leyendo el informe terminado.
+
+Al final imprime, siempre, **de qué máster sale el catálogo y con qué número
+aparecen en él los dos obligatorios**. Es la línea que hay que mirar si algo no
+cuadra.
 
 Salida `2` → **para**, no se genera informe. Salida `1` son avisos y hay que
 contarlos: el más importante es un riesgo elegido sin evidencia cuantitativa.
@@ -500,9 +545,29 @@ llega al expediente, aunque el script diga que lo ha escrito.
 `--generado` lo pones tú: nada aquí lee el reloj. **`--catalogo` es obligatorio**,
 igual que en el paso anterior.
 
-**`--ref` es obligatoria y se la preguntas al usuario.** No hay valor por defecto
-a propósito: escribir una referencia inventada mete en el expediente un código que
-no existe en el índice de Gesia. Pregúntale cuál es antes de generar.
+**`--ref` es obligatoria y no tiene valor por defecto a propósito**: escribir una
+referencia inventada mete en el expediente un código que no existe en el índice de
+Gesia.
+
+**Búscala primero en el expediente, y pregunta solo si no sale una y solo una.**
+El papel suele existir ya, y preguntar por algo que está a una consulta es hacerle
+perder el tiempo al auditor:
+
+```sql
+SELECT CodigoReferencia, Referencia FROM Referencias
+WHERE Referencia LIKE '%valoraci%n de riesgos%'
+```
+
+El `%` de en medio se come la tilde, así que no depende de cómo esté escrita. En
+los dos expedientes medidos el 04/09/2026 devuelve una sola fila,
+`Identificación y valoración de riesgos`.
+
+- **Una fila** → úsala, y dile al usuario cuál has cogido.
+- **Ninguna, o más de una** → pregúntale, enseñándole lo que has encontrado.
+
+**No fijes el código que salga.** `CodigoReferencia` no es estable entre encargos:
+el mismo código apunta a papeles distintos en expedientes distintos. Lo estable es
+el texto de `Referencia`, y por eso se busca por él.
 
 La línea **Fuente** se compone sola con lo que de verdad se ha usado: «Balance de
 situación, Cuenta de pérdidas y ganancias y módulo de Revisión analítica
@@ -518,6 +583,11 @@ papeles del expediente se lean igual. La fuente se cambia con `--fuente`.
 El informe lleva las cifras en tablas y un gráfico de la evolución del resultado.
 Si `matplotlib` no está disponible, sale sin gráfico y con las mismas cifras en
 tabla. El PNG del gráfico se incrusta en el `.docx` y el script lo borra solo.
+
+**Si inspeccionas el `.docx` por dentro, lee siempre en UTF-8.** El título de
+`docProps/core.xml` sale bien; el 04/09/2026 se dio por corrupto porque se leyó con
+la codificación de la consola, que enseña `Identificaci?n`. Comprobado a nivel de
+byte: son `c3 b3`, que es UTF-8 correcto. No hay nada que arreglar ahí.
 
 ### Paso 9 — Entregar
 
@@ -578,4 +648,21 @@ Lo que no vale es dejarlo en un «puede que queden temporales» sin decir dónde
 | Base del ejercicio anterior despreciable | informa «aparece» o «base despreciable», sin porcentaje |
 | Un id que no está en el catálogo | **aborta.** No se genera el informe |
 | Falta uno de los dos riesgos obligatorios | **aborta** |
+| Los dos obligatorios no se resuelven por nombre en el catálogo | **aborta.** Suele ser un máster sin riesgos |
+| El máster es de otro año que el ejercicio auditado | avisa, y el aviso consta en el informe |
 | `matplotlib` no disponible | informe sin gráfico, cifras en tabla |
+
+## Arnés
+
+```bash
+python "$SKILL/scripts/probar_riesgos.py"
+python "$SKILL/scripts/probar_riesgos.py" --catalogo "$TRABAJO/riesgos.json"
+```
+
+No necesita Gesia, ni red, ni un máster en disco: lleva dentro las dos
+numeraciones medidas y comprueba que los dos riesgos obligatorios se resuelven por
+nombre en cada una. Con `--catalogo` comprueba además uno de verdad, y es la forma
+rápida de ver con qué número salen los obligatorios en el máster del cliente.
+
+Se escribió el 04/09/2026 con el fallo delante, y muerde: devolviendo los ids fijos
+que había antes, nueve de sus comprobaciones fallan.

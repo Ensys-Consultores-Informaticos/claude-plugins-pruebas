@@ -36,8 +36,10 @@ from pathlib import Path
 from lib_riesgos import (
     MAX_RIESGOS,
     MIN_RIESGOS,
-    OBLIGATORIOS,
+    SinObligatorios,
+    aviso_master,
     cargar_catalogo,
+    resolver_obligatorios,
     salida_utf8,
 )
 
@@ -48,10 +50,23 @@ def main() -> int:
     p.add_argument("--seleccion", required=True)
     p.add_argument("--analisis", help="para comprobar que la evidencia citada existe")
     p.add_argument("--catalogo")
+    p.add_argument("--ejercicio",
+                   help="el ejercicio auditado, p.ej. 2025. Solo sirve para avisar "
+                        "si el catálogo es del máster de otro año")
     args = p.parse_args()
 
     catalogo = cargar_catalogo(args.catalogo)
     por_id = catalogo["por_id"]
+
+    # Los dos obligatorios se resuelven POR NOMBRE contra ESTE catalogo: su
+    # numero es la numeracion interna del master que se acaba de leer y cambia
+    # de un master a otro. Si no se pueden resolver, no se valida nada.
+    try:
+        obligatorios = resolver_obligatorios(catalogo)
+    except SinObligatorios as exc:
+        print("ERROR   " + str(exc))
+        return 2
+    ids_obligatorios = [r["id"] for r in obligatorios]
 
     datos = json.loads(Path(args.seleccion).read_text(encoding="utf-8"))
     elegidos = datos.get("riesgos") if isinstance(datos, dict) else datos
@@ -99,12 +114,11 @@ def main() -> int:
             avisos.append("el riesgo " + str(i) + " viene sin nombre; se usará el "
                           "del catálogo")
 
-    # V04 · los dos obligatorios
-    faltan = [i for i in OBLIGATORIOS if i not in ids]
-    if faltan:
-        for i in faltan:
-            errores.append("falta el riesgo obligatorio " + str(i) + " — "
-                           + por_id[i]["nombre"])
+    # V04 · los dos obligatorios, con el numero que tienen en este catalogo
+    for r in obligatorios:
+        if r["id"] not in ids:
+            errores.append("falta el riesgo obligatorio " + str(r["id"]) + " — "
+                           + r["nombre"])
 
     # V05 · cuantos. El rango es orientativo: fuera de rango se avisa, no se aborta.
     n = len(set(ids))
@@ -124,7 +138,7 @@ def main() -> int:
             i = int(r.get("id"))
         except (TypeError, ValueError):
             continue
-        if i in OBLIGATORIOS:
+        if i in ids_obligatorios:
             continue
         ev = r.get("evidencia") or {}
         # La evidencia puede venir de dos sitios y las dos valen: un epigrafe del
@@ -146,6 +160,12 @@ def main() -> int:
                           + repr(ev.get("ratio") or ev.get("elemento"))
                           + " pero no su valor")
 
+    # V07 · el master del catalogo. Se avisa, no se aborta: puede haber una razon
+    # para usar el de otro año, pero tiene que ser una decision y no un descuido.
+    desfase = aviso_master(catalogo, args.ejercicio)
+    if desfase:
+        avisos.append(desfase)
+
     for e in errores:
         print("ERROR   " + e)
     for a in avisos:
@@ -156,10 +176,13 @@ def main() -> int:
         return 2
 
     print("\nSelección válida: " + str(n) + " riesgos, con los "
-          + str(len(OBLIGATORIOS)) + " obligatorios.")
-    obligatorios_texto = ", ".join(str(i) + " (" + por_id[i]["nombre"][:40] + ")"
-                                   for i in OBLIGATORIOS)
-    print("  obligatorios: " + obligatorios_texto)
+          + str(len(obligatorios)) + " obligatorios.")
+    print("  catálogo: " + str(catalogo.get("version") or "sin identificar")
+          + ", " + str(len(catalogo.get("riesgos") or [])) + " riesgos")
+    # Con el numero SIEMPRE el nombre: el numero solo significa algo dentro de
+    # este catalogo, y leerlo suelto es lo que dejo pasar dos riesgos que no eran.
+    for r in obligatorios:
+        print("  obligatorio: " + str(r["id"]) + " — " + r["nombre"])
     if avisos:
         print("Con " + str(len(avisos)) + " aviso(s) que tienen que constar en el "
               "informe.")

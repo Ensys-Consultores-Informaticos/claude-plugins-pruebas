@@ -110,10 +110,27 @@ def main() -> int:
             )
 
     # A01 · CONCEPTO vacio no rompe el emparejamiento (va por fecha e importe,
-    # no por texto) pero hace el papel menos legible para revisar a mano
-    vacio_concepto = (
-        df["CONCEPTO"].isna() | (df["CONCEPTO"].astype(str).str.strip() == "")
-    ).mean()
+    # no por texto) pero hace el papel menos legible para revisar a mano.
+    # Lo normal desde el MCP 1.11.0 es que el extracto NO traiga CONCEPTO y si
+    # FechaEnConcepto/NumeroEnConcepto: eso no es un aviso, es el diseño.
+    if "FECHA_DOC" not in df.columns:
+        avisos.append(
+            "A01 · el extracto no trae fecha de documento: ni FechaEnConcepto -que el MCP "
+            "deriva en local si el SELECT pide CONCEPTO- ni CONCEPTO. El emparejamiento "
+            "no la necesita, pero los hallazgos por fecha de documento y el plazo de pago "
+            "quedaran SIN EVALUAR: hay que decirlo al entregar, y la proxima vez pedir "
+            "CONCEPTO en el SELECT (el texto no viaja; la fecha y el numero, si)."
+        )
+        vacio_concepto = 0.0
+    elif "CONCEPTO" not in df.columns:
+        print("A01 · el extracto no trae el texto del CONCEPTO, y si la fecha y el numero "
+              "derivados de el (" + str(df.attrs.get("fuente_fecha_doc")) + "): el papel "
+              "no lleva la columna de texto y los hallazgos por fecha se evaluan igual.")
+        vacio_concepto = 0.0
+    else:
+        vacio_concepto = (
+            df["CONCEPTO"].isna() | (df["CONCEPTO"].astype(str).str.strip() == "")
+        ).mean()
     if vacio_concepto > 0.3:
         avisos.append(
             "A01 · el " + format(vacio_concepto * 100, ".0f") + "% de los apuntes "

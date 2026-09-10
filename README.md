@@ -19,6 +19,18 @@ Para volver a producción: desactiva o desinstala este, reactiva el de `ensys` y
 
 ## Qué se prueba ahora
 
+**MCP 1.11.0 — confidencialidad, ticket 1** (plugin de pruebas 1.10.0, 10/09/2026). El MCP
+no sirve nunca el `DNI` de `Personal` ni la tabla `ContactosSede`. Herramienta nueva
+`columnas(fuente, tabla)`: qué columnas hay, sin traer ninguna fila —sustituye al
+`SELECT TOP 1 *`—. Al exportar el diario, `CONCEPTO` no sale: en su lugar van
+`NumeroEnConcepto` y `FechaEnConcepto`, derivadas en local; `configurar(concepto=true)` deja
+pasar el texto si el auditor lo decide, solo en esa sesión. Y cada exportación queda anotada en
+`<expediente>/InformesGesia/RegistroEmision.jsonl` (columnas y filas, nunca valores). Qué
+probar: `cancelacion-saldos` de punta a punta —debe usar `columnas()`, pedir `CONCEPTO` en el
+SELECT, hacer la pregunta del concepto tal cual, y el papel debe salir con `FECHA DOC.` y decir
+en criterios de dónde salen el número y la fecha—.
+
+
 **MCP 1.9.2 — la ayuda de `evaluacion` corta la evaluación de la MUM.** Tras el primer
 ensayo real: el modelo neteó los errores y dio un porcentaje sobre la muestra. Ahora la ayuda
 dice que se listan los elementos con error y ahí se para; la proyección es de ForSampling.

@@ -69,7 +69,14 @@ MAX_PAGOS_APERTURA = 14        # candidatos que se prueban por combinacion al ca
                                # apertura se cancela con los pagos de enero, que
                                # siempre caen dentro de esos primeros candidatos
 
-COLUMNAS_REQUERIDAS = ("FECHA", "CUENTA", "NOMBRE", "CONCEPTO")
+# CONCEPTO ya no es obligatorio (10/09/2026, rama confidencialidad). Es texto
+# libre con nombres, matriculas y referencias, y el emparejamiento NO lo usa: lo
+# lee el auditor en el papel. Asi que si el auditor decide que no salga de su
+# maquina, el extracto viene sin el y todo tiene que seguir funcionando. Lo que
+# NO puede pasar es que su ausencia degrade algo en silencio: ver
+# analizar_hallazgos, donde sin concepto la fecha del documento no existe y los
+# «pagos anteriores a su factura» se dejan SIN EVALUAR en vez de calcularse mal.
+COLUMNAS_REQUERIDAS = ("FECHA", "CUENTA", "NOMBRE")
 
 # valores de la columna ORIGEN del resultado
 ORIGEN_CONTABLE = "contable"     # el grupo venia punteado en el .smn (Indice)
@@ -78,6 +85,40 @@ ORIGEN_AUDITORIA = "auditoría"   # el grupo lo asigno este modulo
 
 def _round2(v) -> float:
     return round(float(v), 2)
+
+
+def _columna_documento(columnas) -> str | None:
+    """La columna del numero de factura, se llame como se llame, o None.
+
+    El nombre no esta normalizado: NN_Factura en un .smn, NN_NumFactura o
+    Factura o Documento en otro (David, 10/09/2026). Se busca por lo que dice el
+    nombre, no por una lista cerrada: contiene «factura» o «documento», y no es
+    una fecha ni un importe. Si hay varias candidatas gana la que mas se parece a
+    lo conocido, y la eleccion se ve en el papel porque la columna sale con su
+    nombre original en el reconocimiento.
+    """
+    def norm(c):
+        return str(c).strip().lower().replace("nn_", "").replace("_", "").replace(" ", "")
+    exactas = ("factura", "nfactura", "numfactura", "numerofactura", "nrofactura",
+               "documento", "numdocumento", "numerodocumento", "ndocumento")
+    for c in columnas:
+        if norm(c) in exactas:
+            return c
+    for c in columnas:
+        k = norm(c)
+        if ("factura" in k or "documento" in k) and not any(
+                x in k for x in ("fecha", "importe", "base", "total", "tipo", "clase")):
+            return c
+    # Y con MENOR prioridad que cualquier columna del diario: el numero que el MCP
+    # deriva en local del concepto (NumeroEnConcepto, docs/confidencialidad.md,
+    # ticket 1). Medido el 10/09/2026 en seis diarios: donde hay NN_Factura, el
+    # 98% de sus grupos suman cero; el derivado del concepto, el 78-90%. Con los
+    # dos, manda la columna; el derivado es para los diarios que no la traen, que
+    # son cuatro de siete.
+    for c in columnas:
+        if norm(c) == "numeroenconcepto":
+            return c
+    return None
 
 
 def cargar_extracto(ruta) -> pd.DataFrame:
@@ -122,12 +163,8 @@ def cargar_extracto(ruta) -> pd.DataFrame:
     # NN_Factura; el extracto puede traerlo con ese nombre o ya renombrado.
     # "0" y vacio significan «sin factura» y se normalizan a "", que es lo que
     # el paso 2.0 ignora.
-    col_fra = next(
-        (c for c in df.columns
-         if str(c).strip().lower() in ("nn_factura", "factura", "nfactura",
-                                       "num_factura", "numfactura")),
-        None,
-    )
+    col_fra = _columna_documento(df.columns)
+    fuente_documento = col_fra
     if col_fra is not None:
         df["FACTURA"] = (df[col_fra].fillna("").astype(str).str.strip()
                          .replace({"0": "", "nan": "", "None": ""}))
@@ -147,11 +184,31 @@ def cargar_extracto(ruta) -> pd.DataFrame:
         if col_prev != "INDICE_PREVIO":
             df = df.drop(columns=[col_prev])
 
+    # LA FECHA DEL DOCUMENTO, tambien opcional, y con dos origenes por este orden:
+    # la que el MCP deriva en local del concepto (FechaEnConcepto: el texto no sale
+    # del equipo, la fecha si), o, si el auditor autorizo que el concepto viajara y
+    # el MCP no la derivo -version antigua-, leida aqui del propio CONCEPTO con la
+    # misma regla. Se normaliza a FECHA_DOC y el resto del skill no sabe de donde
+    # vino; el papel si lo dice.
+    fuente_fecha_doc = None
+    col_fdoc = next((c for c in df.columns
+                     if str(c).strip().lower() == "fechaenconcepto"), None)
+    if col_fdoc is not None:
+        df["FECHA_DOC"] = pd.to_datetime(df[col_fdoc], errors="coerce")
+        if col_fdoc != "FECHA_DOC":
+            df = df.drop(columns=[col_fdoc])
+        fuente_fecha_doc = "FechaEnConcepto"
+    elif "CONCEPTO" in df.columns:
+        df["FECHA_DOC"] = pd.to_datetime(df["CONCEPTO"].map(_fecha_desde_concepto),
+                                         errors="coerce")
+        fuente_fecha_doc = "CONCEPTO"
+
     df["FECHA"] = pd.to_datetime(df["FECHA"], errors="coerce", dayfirst=False)
     df["SALDO"] = pd.to_numeric(df["SALDO"], errors="coerce")
     df["CUENTA"] = df["CUENTA"].astype(str)
     df["NOMBRE"] = df["NOMBRE"].fillna("").astype(str)
-    df["CONCEPTO"] = df["CONCEPTO"].fillna("").astype(str)
+    if "CONCEPTO" in df.columns:
+        df["CONCEPTO"] = df["CONCEPTO"].fillna("").astype(str)
 
     # ORDEN PROPIO, sin fiarse de quien llame. El pareo directo recorre las
     # filas en el orden en que vienen, asi que un ORDER BY distinto en la
@@ -165,6 +222,11 @@ def cargar_extracto(ruta) -> pd.DataFrame:
     clave = [c for c in ("CUENTA", "FECHA", "ASIENTO", "SALDO", "CONCEPTO")
              if c in df.columns]
     df = df.sort_values(clave, kind="mergesort").reset_index(drop=True)
+    # de donde salieron el numero y la fecha del documento: lo dicen el papel y
+    # el reconocimiento, para que el auditor sepa que se esta fiando de una
+    # columna del diario o de un texto leido
+    df.attrs["fuente_documento"] = fuente_documento
+    df.attrs["fuente_fecha_doc"] = fuente_fecha_doc
     return df
 
 
@@ -564,18 +626,34 @@ def verificar_cuenta(df_resultado: pd.DataFrame) -> dict:
 # Esta fecha se usa SOLO PARA INFORMAR. El emparejamiento sigue trabajando con
 # la fecha contable: hacerlo depender de un campo de texto libre que el cliente
 # rellena como quiere seria fragil, y un 8% de las facturas no lo traen.
-_FECHA_CONCEPTO = re.compile(r"(\d{2})/(\d{2})/(\d{4})")
+#
+# Desde la 1.11.0 del MCP la fecha llega ya extraida (FechaEnConcepto) y el
+# concepto no viaja. La regex de aqui es la MISMA que aplica el MCP, y solo se
+# usa si el extracto trae CONCEPTO y no la derivada: d/m/a con / . o -, año de 2
+# o 4 cifras, sin cifras ni separadores pegados a los lados.
+_FECHA_CONCEPTO = re.compile(r"(?<![\d/.-])(\d{1,2})[/.-](\d{1,2})[/.-](\d{4}|\d{2})(?![\d/.-])")
 
 
-def fecha_documento(concepto, por_defecto):
-    """Fecha del documento escrita en el concepto, o la que se pase si no hay."""
-    m = _FECHA_CONCEPTO.search(str(concepto))
-    if not m:
-        return por_defecto
-    try:
-        return pd.Timestamp(int(m.group(3)), int(m.group(2)), int(m.group(1)))
-    except ValueError:
-        return por_defecto
+def _fecha_desde_concepto(concepto):
+    """Fecha del documento escrita en el concepto, como Timestamp, o NaT."""
+    for m in _FECHA_CONCEPTO.finditer(str(concepto or "")):
+        d, mes, a = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if a < 100:
+            a += 2000
+        if not 1990 <= a <= 2099:
+            continue
+        try:
+            return pd.Timestamp(a, mes, d)
+        except ValueError:
+            continue
+    return pd.NaT
+
+
+def fecha_documento(fila):
+    """La fecha del documento de un apunte si la tiene (FECHA_DOC); si no, su
+    fecha contable."""
+    f = fila.get("FECHA_DOC", pd.NaT)
+    return f if pd.notna(f) else fila["FECHA"]
 
 
 def _signo_documento(res) -> int:
@@ -615,17 +693,19 @@ def _lados(grupo, signo_doc: int):
 def _lados_por_texto(grupo):
     """Respaldo cuando el signo no se puede deducir: que lado trae fecha.
 
-    Las lineas de factura suelen escribir la fecha del documento en el
-    concepto y las de pago no. Es una pista de texto, y por eso va SEGUNDA:
-    solo se usa en cuentas sin apertura y con saldo cero, donde el criterio
-    estructural no dice nada. Si tampoco decide, el grupo no se evalua.
+    Las lineas de factura suelen llevar fecha de documento (FECHA_DOC) y las de
+    pago no. Es una pista de texto, y por eso va SEGUNDA: solo se usa en cuentas
+    sin apertura y con saldo cero, donde el criterio estructural no dice nada.
+    Si tampoco decide, el grupo no se evalua.
     """
+    if "FECHA_DOC" not in grupo.columns:
+        return None, None
     pos = grupo[grupo["SALDO"] > TOL]
     neg = grupo[grupo["SALDO"] < -TOL]
     if pos.empty or neg.empty:
         return None, None
-    con_pos = sum(1 for c in pos["CONCEPTO"] if _FECHA_CONCEPTO.search(str(c)))
-    con_neg = sum(1 for c in neg["CONCEPTO"] if _FECHA_CONCEPTO.search(str(c)))
+    con_pos = int(pos["FECHA_DOC"].notna().sum())
+    con_neg = int(neg["FECHA_DOC"].notna().sum())
     if con_neg > con_pos:
         return neg, pos
     if con_pos > con_neg:
@@ -634,7 +714,15 @@ def _lados_por_texto(grupo):
 
 
 def analizar_hallazgos(df: pd.DataFrame, por_cuenta: dict) -> dict:
-    """Recuentos para la hoja de criterios y hallazgos. No juzga nada."""
+    """Recuentos para la hoja de criterios y hallazgos. No juzga nada.
+
+    Si el extracto no trae fecha de documento -ni FechaEnConcepto derivada por
+    el MCP ni CONCEPTO del que leerla-, TODO el bloque de «pagos anteriores a su
+    factura» y el plazo de pago se dejan sin evaluar. No se calcula con la fecha
+    contable: eso daria una cifra inflada con aspecto de hallazgo. El papel dice
+    «no evaluado», que es distinto de «cero».
+    """
+    con_fecha_doc = "FECHA_DOC" in df.columns
     plazos = []
     facturas = con_fecha = 0
     anom_doc = anom_solo_registro = no_evaluables = 0
@@ -684,6 +772,8 @@ def analizar_hallazgos(df: pd.DataFrame, por_cuenta: dict) -> dict:
         else:
             ctas_sin_apertura += 1
 
+        if not con_fecha_doc:
+            continue      # sin fecha de documento no hay nada que comparar
         signo_doc = _signo_documento(res)
         for ind, g in res[res["INDICE"] > 0].groupby("INDICE"):
             docs, pagos = _lados(g, signo_doc)
@@ -693,11 +783,9 @@ def analizar_hallazgos(df: pd.DataFrame, por_cuenta: dict) -> dict:
                 no_evaluables += 1
                 continue
             facturas += len(docs)
-            con_fecha += sum(1 for c in docs["CONCEPTO"]
-                             if _FECHA_CONCEPTO.search(str(c)))
+            con_fecha += int(docs["FECHA_DOC"].notna().sum())
             f_pago = pagos["FECHA"].min()
-            f_doc = min(fecha_documento(r["CONCEPTO"], r["FECHA"])
-                        for _, r in docs.iterrows())
+            f_doc = min(fecha_documento(r) for _, r in docs.iterrows())
             if f_pago < f_doc:
                 anom_doc += 1
                 if len(g) > 2:
@@ -720,6 +808,10 @@ def analizar_hallazgos(df: pd.DataFrame, por_cuenta: dict) -> dict:
     return {
         "cuentas": len(por_cuenta),
         "apuntes": int(len(df)),
+        "fecha_doc_disponible": con_fecha_doc,
+        "fuente_fecha_doc": df.attrs.get("fuente_fecha_doc"),
+        "fuente_documento": df.attrs.get("fuente_documento"),
+        "concepto_disponible": "CONCEPTO" in df.columns,
         "grupos_evaluados": anom_doc + anom_solo_registro + len(plazos),
         "facturas_con_fecha_doc": con_fecha,
         "facturas_totales": facturas,
