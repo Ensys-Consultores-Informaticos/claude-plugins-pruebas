@@ -198,12 +198,15 @@ anterior.
 muchas.** Sale de una consulta y no cuesta nada:
 
 ```
-consultar_diario(sql = "SELECT Count(*) AS Cuentas FROM
-  (SELECT CUENTA FROM Diario WHERE CUENTA LIKE '43%'
+consultar_diario(sql = "SELECT Count(*) AS Cuentas, Sum(N) AS Apuntes FROM
+  (SELECT CUENTA, Count(*) AS N FROM Diario WHERE CUENTA LIKE '43%'
     GROUP BY CUENTA HAVING Abs(Sum(SALDO)) > 0.005)")
 ```
 
-**El `HAVING` no es opcional: es el mismo filtro que la exportación del paso 2**,
+**Las dos cifras salen de la misma consulta y con el mismo `HAVING`, y son las que se
+le dicen al auditor.** En la prueba en frío del 10/09/2026 se le dijeron 1.346 apuntes
+—los de todo el grupo— y el papel llevó 967: los de las cuentas con saldo vivo. **El
+`HAVING` no es opcional: es el mismo filtro que la exportación del paso 2**,
 que deja fuera las cuentas que ya cierran a cero. Sin él, el número que se le da
 al auditor no es el de hojas que va a recibir. Medido el 08/09/2026 en un
 expediente real: el grupo 43 tiene **419 cuentas** y solo **71** con saldo vivo,
@@ -255,8 +258,11 @@ existen**; si no, no se piden — pedir una que no está da el error de Access
 - **`Indice`**, el punteo previo de la contabilidad. El skill lo respeta y lo
   completa.
 - **La columna del número de documento**, que **no tiene un nombre fijo**:
-  `NN_Factura`, `NN_NumFactura`, `Factura`, `Documento`… Pide la que `columnas()`
-  enseñe con «factura» o «documento» en el nombre. Es la clave con la que el auditor
+  `NN_Factura`, `NN_NumFactura`, `Factura`, `Documento`… Pide **todas** las que
+  `columnas()` enseñe con «factura» o «documento» en el nombre —un diario puede traer
+  `NN_Factura` y `NN_Documento` a la vez, pasó el 10/09/2026—: **no elijas tú**. El script
+  puntúa cada una por los grupos que cierra a cero, se queda con la que más cierra, y
+  el reconocimiento y la hoja de criterios dicen cuál y por cuánto. Es la clave con la que el auditor
   empareja a mano, y con ella el skill cancela lo que ningún criterio de importes
   alcanza: una factura pagada en tres plazos desiguales. **Un grupo por número solo
   se acepta si suma cero**, así que si el campo viniera sucio no cambia nada. Si no
@@ -397,12 +403,16 @@ No escribe ningún fichero. Dice qué columnas hay, **cuánto cancelaría cada s
 sobre este cliente**, cuántas aperturas se quedarían sin cerrar y con qué importe, qué
 cuentas se atascan, y los grupos que se quedan a un céntimo de cuadrar.
 
-**Y termina con una lista numerada de PREGUNTAS AL AUDITOR.** Esa lista es la buena:
-son las que el script no puede contestar solo, y ya vienen redactadas con la cuenta y el
-importe de los que hablan.
+**Y termina con una lista numerada de PREGUNTAS AL AUDITOR, cada una con sus opciones.**
+Esa lista es la buena: son las que el script no puede contestar solo, y ya vienen
+redactadas con la cuenta y el importe de los que hablan.
 
-**Pásalas TAL CUAL: todas, con su número, sin resumirlas y sin convertir ninguna en una
-afirmación.** Y luego **espera respuesta**. Medido el 08/09/2026 en ChatGPT Cowork: el
+**Hazlas con la herramienta de preguntas al usuario si el entorno la tiene** —una entrada
+por pregunta, el texto tal cual, las opciones que trae el script; la herramienta ya ofrece
+«otra» libre, y si una opción acaba en «...» el auditor escribe ahí lo que falta—. El
+auditor prefiere contestar así a leer un bloque de texto (10/09/2026). **Si no hay
+herramienta, pásalas como lista numerada TAL CUAL: todas, con su número, sin resumirlas y
+sin convertir ninguna en una afirmación.** En los dos casos, luego **espera respuesta**. Medido el 08/09/2026 en ChatGPT Cowork: el
 modelo reescribió el bloque a su manera y se dejó una pregunta entera por el camino —la del
 número de documento reutilizado entre ejercicios— y convirtió la de la apertura en un dato
 informativo, así que nadie preguntó por el mayor del ejercicio anterior. La lista del script
@@ -415,8 +425,10 @@ Lo que cambia cada respuesta, para que sepas qué hacer con ella:
 - **El mayor del ejercicio anterior** → todavía no se usa: apúntalo y dilo al entregar. La
   apertura es lo que más vale del procedimiento, así que la respuesta interesa aunque hoy
   no se pueda aprovechar.
-- **Barrer los céntimos** → el skill **no sabe hacerlo todavía**. Si dice que sí, los grupos
-  se quedan pendientes igual y **se cuenta como limitación al entregar**, con el importe.
+- **Los grupos a menos de 5 céntimos** ya no se preguntan: el script los da como **dato**,
+  porque el skill **no sabe barrer céntimos** y preguntar lo que después no se puede aplicar
+  es peor que no preguntar (pasó dos veces). Se quedan pendientes y **se cuenta al entregar**,
+  con el importe.
 - **Cómo paga o cobra el cliente** → confirma o desmiente lo que ya se ve en los tamaños de
   grupo del reconocimiento. Si dice algo que el dato no muestra —remesas, confirming—, dilo
   al entregar: es donde el papel se queda corto.
@@ -518,7 +530,20 @@ cronológico** con autofiltro en la cabecera, y solo hay dos colores —**gris**
 en la fila de lo que ya venía punteado en la contabilidad, y **amarillo en la
 celda del importe** de lo que no se ha podido parear, que es lo que compone el
 saldo vivo de la cuenta. Lo que cancela este papel no lleva color: para saber
-de dónde salió cada grupo está la columna ORIGEN.
+de dónde salió cada grupo está la columna ORIGEN, que dice **el paso que lo formó**:
+`documento`, `apertura`, `total`, `importe`, `acumulación` o `combinación` (y `contable`
+si venía punteado). Los de `acumulación` y `combinación` cierran por aritmética sobre
+importes que no se parecen: **un grupo de 26 apuntes por acumulación puede ser real o
+casualidad**, y la hoja de criterios cuenta cuántos hay de cada paso para que el auditor
+sepa dónde mirar. Al entregar, si hay grupos grandes por acumulación o combinación, dilo.
+
+Y en los pagos anteriores a su factura, **tres filas, no dos**: «con la fecha del
+documento» (los que hay que mirar), «lo parecen solo por la fecha de registro» (no son
+anomalía) y **«solo con la fecha contable»**, que son los de facturas **sin** fecha de
+documento: ahí no se puede distinguir un registro tardío de un pago anticipado, y **no se
+presentan como hallazgos ciertos**. En la prueba en frío del 10/09/2026, con el 0 % de
+facturas con fecha, se entregaron seis «reales según la fecha del documento» que no lo
+eran.
 
 ### Paso 4 — Entregar
 

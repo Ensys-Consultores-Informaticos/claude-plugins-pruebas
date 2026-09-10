@@ -67,7 +67,8 @@ def _hoja_cuenta(wb: Workbook, cuenta: str, res, info: dict) -> dict:
     ws["A1"].font = Font(name=FONT, bold=True, size=13)
     ws["A2"] = ("Emparejamiento de facturas y pagos — gris: punteado ya en la "
                 "contabilidad; amarillo: importe sin parear, que compone el "
-                "saldo vivo de la cuenta")
+                "saldo vivo de la cuenta. ORIGEN dice el paso que formo cada grupo: "
+                "documento, apertura, total, importe, acumulacion o combinacion")
     ws["A2"].font = Font(name=FONT, italic=True, size=9, color="595959")
     # la banda de titulo llega hasta la ultima columna, que es una mas cuando el
     # extracto trae el numero de documento
@@ -283,6 +284,11 @@ def _hoja_criterios(ws, h: dict) -> None:
     else:
         nota_doc = ("Ninguno: el diario no trae columna de numero de factura y el concepto "
                     "no lleva ninguno reconocible. El paso 0 no ha actuado.")
+    cand = h.get("candidatas_documento") or []
+    if len(cand) > 1:
+        nota_doc += (" Habia " + str(len(cand)) + " columnas candidatas y se eligio la que mas "
+                     "grupos cierra a cero: "
+                     + " · ".join(f"{c} {z}/{g}" for c, g, z in cand) + ".")
     f = linea(f, "Numero de documento del paso 0",
               (str(fuente_doc) if fuente_doc else "ninguno"), nota_doc)
     f += 1
@@ -296,6 +302,14 @@ def _hoja_criterios(ws, h: dict) -> None:
     f = linea(f, "Cuentas procesadas", h["cuentas"])
     f = linea(f, "Apuntes", h["apuntes"])
     f = linea(f, "Grupos evaluados", h["grupos_evaluados"])
+    por_paso = h.get("grupos_por_paso") or {}
+    if por_paso:
+        f = linea(f, "Grupos nuevos, por el paso que los formo",
+                  " · ".join(f"{k} {v}" for k, v in por_paso.items()),
+                  "Los de «acumulación» y «combinación» cierran por aritmetica sobre "
+                  "importes que no se parecen: son los que merecen una segunda mirada, "
+                  "y mas cuanto mas apuntes tengan. La columna ORIGEN de cada hoja lo "
+                  "dice grupo a grupo.")
     if h["grupos_no_evaluables"]:
         f = linea(f, "Grupos no evaluables", h["grupos_no_evaluables"],
                   "No se puede distinguir que lado son documentos y cual pagos: no "
@@ -343,6 +357,12 @@ def _hoja_criterios(ws, h: dict) -> None:
     f = linea(f, "Con la fecha del documento", h["anomalos"],
               "Los que hay que mirar: el pago es anterior a la fecha que la factura "
               "lleva escrita.")
+    f = linea(f, "Solo con la fecha contable (la factura no lleva fecha de documento)",
+              h.get("anomalos_sin_fecha_doc", 0),
+              "El pago es anterior al ASIENTO de una factura que no lleva fecha de "
+              "documento: no se puede distinguir un registro a fin de mes de un pago "
+              "anticipado. NO son hallazgos confirmados; para saberlo hay que ver el "
+              "documento.")
     f = linea(f, "  la pareja venia forzada por el importe", h["anom_forzados"],
               "Ese importe aparece una sola vez a cada lado: no habia emparejamiento "
               "alternativo, asi que no es una eleccion del papel.")

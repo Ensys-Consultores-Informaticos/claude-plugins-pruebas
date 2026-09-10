@@ -52,6 +52,12 @@ de punteo previo (la columna Indice que traen muchos .smn):
            (con menor prioridad que una columna del diario), la fecha hace de
            FECHA_DOC, los hallazgos por fecha SI se evaluan, y el papel lleva
            FECHA DOC. y FACTURA, dice de donde salen, y el TOTAL cae bajo SALDO
+  9999917  DOS CANDIDATAS -- el diario trae NN_Factura y NN_Documento (prueba en
+           frio del 10/09/2026). No decide el orden del SELECT: se puntua cada una
+           por grupos que suman cero y gana la que mas cierra; la comparacion consta.
+           Y ORIGEN dice el paso: documento / apertura / importe / acumulacion.
+           Y los pagos anteriores a una factura SIN fecha de documento van a su
+           propia fila, no a «con la fecha del documento».
 
 Por que hace falta: en una cuenta sin nada que cancelar, un emparejador
 roto y uno correcto pueden dar el mismo resultado (todo en INDICE 0). Que
@@ -66,7 +72,13 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from lib_cancelacion import (  # noqa: E402
+from lib_cancelacion import (
+    PASO_ACUMULACION,
+    PASO_APERTURA,
+    PASO_DOCUMENTO,
+    PASO_IMPORTE,
+    PASO_TOTAL,
+    PASOS_ORIGEN,  # noqa: E402
     ORIGEN_AUDITORIA,
     ORIGEN_CONTABLE,
     asignar_indices_cuenta,
@@ -308,9 +320,11 @@ def main() -> int:
                       "(el maximo previo), y es "
                       + str(int(porc.loc["Fra nueva", "INDICE"])))
         ok = False
-    if not (porc.loc[["Fra nueva", "Pago nuevo"], "ORIGEN"] == ORIGEN_AUDITORIA).all():
+    # el 2.2 («total»: todo menos el ultimo suma cero) llega antes que el 2.3 («importe»)
+    if not porc.loc[["Fra nueva", "Pago nuevo"], "ORIGEN"].isin([PASO_IMPORTE, PASO_TOTAL]).all():
         fallos.append("9999906 (punteo previo): el par nuevo deberia venir con "
-                      "ORIGEN auditoria")
+                      "ORIGEN del paso que lo formo («total» o «importe»), y trae "
+                      + str(porc.loc[["Fra nueva", "Pago nuevo"], "ORIGEN"].tolist()))
         ok = False
     if not _es_cero(res, "Fra pendiente"):
         fallos.append("9999906 (punteo previo): Fra pendiente deberia quedar en INDICE 0")
@@ -598,7 +612,79 @@ def main() -> int:
                 else:
                     print("OK  9999916 (derivadas): el papel lleva FECHA DOC. y FACTURA, dice su origen, y el TOTAL cae bajo SALDO")
 
-    print("\nTodo detectado. El emparejador ve los dieciseis casos y las verificaciones cuadran.")
+        # 9999917 -- dos candidatas: NN_Factura buena, NN_Documento mala (mismo valor en todo)
+        f17 = FIXTURES["9999912"].copy()
+        f17["ASIENTO"] = [str(i) for i in range(1, len(f17) + 1)]
+        f17["FECHA"] = f17["FECHA"].dt.strftime("%Y-%m-%d")
+        f17 = f17.rename(columns={"FACTURA": "NN_Factura"})
+        f17["NN_Documento"] = "ZZZ"          # agrupa todo en un solo grupo que NO suma cero
+        f17 = f17[["FECHA", "CUENTA", "NOMBRE", "CONCEPTO", "NN_Documento", "NN_Factura", "SALDO", "ASIENTO"]]  # la mala ANTES
+        (tmp / "e17.json").write_text(f17.to_json(orient="records"), encoding="utf-8")
+        df17 = cargar_extracto(tmp / "e17.json")
+        cand17 = df17.attrs.get("candidatas_documento") or []
+        if df17.attrs.get("fuente_documento") != "NN_Factura" or len(cand17) != 2 or cand17[0][0] != "NN_Factura":
+            fallos.append("9999917: con dos candidatas tiene que ganar la que mas grupos cierra (NN_Factura), no la primera del SELECT: "
+                          + str(df17.attrs.get("fuente_documento")) + " " + str(cand17))
+        elif "NN_Documento" in df17.columns or "NN_Factura" in df17.columns:
+            fallos.append("9999917: las candidatas se normalizan a FACTURA y no se quedan sueltas")
+        else:
+            print("OK  9999917 (dos candidatas): gana la que mas grupos cierra, y la comparacion consta en attrs")
+        por17 = procesar_extracto(df17)
+        res17 = por17["9999912"][0]
+        origenes = set(res17.loc[res17["INDICE"] > 0, "ORIGEN"])
+        if not origenes <= set(PASOS_ORIGEN):
+            fallos.append("9999917: ORIGEN tiene que decir el paso que formo el grupo, y trae " + str(origenes))
+        elif PASO_DOCUMENTO not in origenes or len(origenes) < 2:
+            # el 88 cierra por documento; lo que queda (Fra 99 / pago sin numero) suma cero
+            # y lo cierra el 2.1 («total») antes de llegar al pareo por importe
+            fallos.append("9999917: en este fixture hay un grupo por documento y otro por total, y ORIGEN trae " + str(origenes))
+        else:
+            print("OK  9999917 (ORIGEN): " + ", ".join(sorted(origenes)) + " -- el paso, no solo «auditoria»")
+        h17 = analizar_hallazgos(df17, por17)
+        if "grupos_por_paso" not in h17 or sum(h17["grupos_por_paso"].values()) != int(res17.loc[res17["INDICE"] > 0, "INDICE"].nunique()):
+            fallos.append("9999917: grupos_por_paso tiene que sumar los grupos nuevos: " + str(h17.get("grupos_por_paso")))
+        else:
+            print("OK  9999917 (hallazgos): grupos_por_paso " + str(h17["grupos_por_paso"]))
+        # la tercera fila: pago anterior a factura SIN fecha de documento
+        f18 = pd.DataFrame([
+            {"FECHA": "2024-03-10", "CUENTA": "9999918", "NOMBRE": "Proveedor Dieciocho", "SALDO": -500.0, "FechaEnConcepto": None, "ASIENTO": "1"},
+            {"FECHA": "2024-02-01", "CUENTA": "9999918", "NOMBRE": "Proveedor Dieciocho", "SALDO": 500.0, "FechaEnConcepto": None, "ASIENTO": "2"},
+            {"FECHA": "2024-01-01", "CUENTA": "9999918", "NOMBRE": "Proveedor Dieciocho", "SALDO": -100.0, "FechaEnConcepto": None, "ASIENTO": "3"},
+            {"FECHA": "2024-01-20", "CUENTA": "9999918", "NOMBRE": "Proveedor Dieciocho", "SALDO": 100.0, "FechaEnConcepto": None, "ASIENTO": "4"},
+            # dos facturas vivas al final, para que ni el 2.1 ni el 2.2 junten toda la cuenta
+            # en un solo grupo: la apertura cierra por 2.2b y el par de 500 por importe
+            {"FECHA": "2024-06-01", "CUENTA": "9999918", "NOMBRE": "Proveedor Dieciocho", "SALDO": -300.0, "FechaEnConcepto": None, "ASIENTO": "5"},
+            {"FECHA": "2024-07-01", "CUENTA": "9999918", "NOMBRE": "Proveedor Dieciocho", "SALDO": -250.0, "FechaEnConcepto": None, "ASIENTO": "6"},
+        ])
+        (tmp / "e18.json").write_text(f18.to_json(orient="records"), encoding="utf-8")
+        df18 = cargar_extracto(tmp / "e18.json")
+        por18 = procesar_extracto(df18)
+        h18 = analizar_hallazgos(df18, por18)
+        if h18["anomalos"] != 0 or h18.get("anomalos_sin_fecha_doc", 0) < 1:
+            fallos.append("9999918: un pago anterior a una factura SIN fecha de documento va a su propia fila, no a «con la fecha del documento»: "
+                          + str({k: h18.get(k) for k in ("anomalos", "anomalos_sin_fecha_doc", "solo_fecha_registro", "grupos_evaluados")}))
+        else:
+            print("OK  9999918 (sin fecha de documento): el pago anterior cae en su propia fila y no se vende como hallazgo cierto")
+        ruta18 = tmp / "p18.xlsx"
+        subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "generar_papel.py"),
+                        "--entrada", str(tmp / "e18.json"), "--salida", str(ruta18)], capture_output=True)
+        if ruta18.exists():
+            crit18 = " ".join(str(c.value) for row in load_workbook(ruta18)["Criterios y hallazgos"].iter_rows() for c in row if c.value)
+            if "Solo con la fecha contable" not in crit18 or "por el paso que los formo" not in crit18:
+                fallos.append("9999918: la hoja de criterios tiene que llevar la fila «Solo con la fecha contable» y los grupos por paso")
+            else:
+                print("OK  9999918 (papel): la hoja de criterios lleva la tercera fila y los grupos por paso")
+        else:
+            fallos.append("9999918: el papel no se ha podido generar")
+
+    # segunda puerta: los bloques de arriba (9999915 en adelante) tambien llenan `fallos`,
+    # y hasta el 10/09/2026 se quedaban sin reportar porque la unica puerta iba antes
+    if fallos:
+        print("\nFALLA:")
+        for f in fallos:
+            print("  - " + f)
+        return 1
+    print("\nTodo detectado. El emparejador ve los dieciocho casos y las verificaciones cuadran.")
     return 0
 
 

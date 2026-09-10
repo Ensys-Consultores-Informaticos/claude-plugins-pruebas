@@ -19,6 +19,16 @@ Para volver a producción: desactiva o desinstala este, reactiva el de `ensys` y
 
 ## Qué se prueba ahora
 
+**Plugin de pruebas 1.10.1 — lo que salió de la primera prueba en frío (10/09/2026).** En
+`cancelacion-saldos`: la columna `ORIGEN` del papel dice el paso que formó cada grupo (documento,
+apertura, total, importe, acumulación, combinación) y criterios cuenta cuántos hay de cada uno; si el
+diario trae varias columnas de número de documento, el script puntúa cada una por grupos que cierran a
+cero y elige (pídelas todas en el SELECT); los pagos anteriores a una factura **sin** fecha de documento
+van a su propia fila y no se presentan como hallazgos ciertos; el recuento del paso 1 da cuentas y
+apuntes con el mismo filtro; los grupos a un céntimo son dato, no pregunta; y las preguntas al auditor
+llevan opciones para hacerlas con la herramienta de preguntas. Qué probar: la misma tarea contestando
+**no** al concepto, y que las preguntas salgan como preguntas.
+
 **MCP 1.11.0 — confidencialidad, ticket 1** (plugin de pruebas 1.10.0, 10/09/2026). El MCP
 no sirve nunca el `DNI` de `Personal` ni la tabla `ContactosSede`. Herramienta nueva
 `columnas(fuente, tabla)`: qué columnas hay, sin traer ninguna fila —sustituye al
