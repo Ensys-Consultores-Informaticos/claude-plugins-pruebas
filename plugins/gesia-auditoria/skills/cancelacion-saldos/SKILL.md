@@ -174,9 +174,19 @@ TRABAJO="$(pwd)/trabajo" && mkdir -p "$TRABAJO"
 ### Paso 1 — Expediente y cuenta(s) a procesar
 
 ```
-configurar()            # sin parámetros: ver estado
+configurar(perfil = "cancelacion-saldos")   # primero: lista blanca y nombres tokenizados
 contexto_expediente()
 ```
+
+**Lo primero, antes de leer nada: `configurar(perfil = "cancelacion-saldos")`.** Con el perfil, el
+MCP retira del extracto las columnas que este skill no necesita y **tokeniza los nombres de
+terceros** en todo lo que devuelve: verás `PROV 40000012` o `CLI 43000007` donde iría la razón
+social. El nombre no sale del equipo del auditor —ni al contenedor ni a este chat—; el papel lo
+recupera al final con `rehidratar`. Trabaja y habla **por cuenta y por token**: «la apertura de
+PROV 40001013 no cierra». **Nunca preguntes al auditor a quién corresponde un token ni lo
+adivines** por el concepto o por los importes: él lo lee en el papel. Si `configurar()` dice
+`nombres_terceros: en claro — forzado por el auditor`, es que lo ha apagado él; no lo
+vuelvas a encender tú.
 
 Si falta `gs3_file`, pide la ruta. Si el servidor API no responde, dile que
 lo arranque en *Herramientas > Gesia - Cuadro de mando > Arrancar servidor
@@ -563,12 +573,23 @@ ese papel no se entrega tal cual. Si hay descuadre del punteo previo,
 cuéntalo como lo que es: un posible error de punteo en la contabilidad del
 cliente, que el auditor tendrá que mirar.
 
+
+**Los nombres.** El fichero se ha escrito con tokens. Cuando ya esté en el disco del auditor
+—en Cowork, después de bajarlo al expediente; en local, directamente—, llama a
+`rehidratar(ruta = "<expediente>/InformesGesia/…/<fichero>", leyenda = true)`: sustituye cada
+token por el nombre real, en local, y devuelve recuentos —ni un nombre vuelve aquí—. Con
+`leyenda = true` añade la tabla token → nombre (hoja «Tokens» en el Excel), para que lo que
+has dicho en el chat con tokens se pueda leer en el papel. **Cuéntale al auditor los dos
+números que devuelve** (sustituciones y tokens distintos) y, si hay `tokens_sin_nombre`,
+dilos tal cual: son cuentas que el diccionario no conoce, no las completes tú.
+
 **Los temporales.** Llama a `limpiar_exportaciones()`: borra el extracto,
 que lleva contabilidad del cliente. Funciona igual en local y en Cowork —lo
 borra el MCP, que corre en la máquina del usuario— y no hay que decirle qué
 fichero: borra lo que él escribió. Si algo no se puede borrar (típicamente
 un `.csv` abierto en Excel), lo dice con su ruta: trasládala al usuario.
-Borra tú el directorio de trabajo aparte, si creaste uno.
+Borra tú el directorio de trabajo aparte, si creaste uno. **El diccionario de nombres no se
+borra**: vive con el encargo, cifrado, y es lo que permite rehidratar un papel de hace días.
 
 ---
 
@@ -600,6 +621,7 @@ Borra tú el directorio de trabajo aparte, si creaste uno.
 | Extracto sin FECHA, CUENTA o NOMBRE | **para.** Faltan columnas obligatorias |
 | Extracto sin CONCEPTO pero con `FechaEnConcepto` y `NumeroEnConcepto` | sigue: es lo normal. El papel va sin el texto y con `FECHA DOC.` y `FACTURA` derivadas; la hoja de criterios dice de dónde salen |
 | Extracto sin fecha de documento (ni `FechaEnConcepto` ni CONCEPTO) | sigue: los hallazgos por fecha de documento quedan sin evaluar; A01 lo dice y se cuenta al entregar |
+| `rehidratar` devuelve `tokens_sin_nombre` | sigue: el papel se entrega con esos tokens tal cual y se dicen al auditor; no se completan a mano |
 | FECHA o SALDO no interpretables | **para**, y dice cuántos apuntes |
 | El diario no trae columna `Indice` | sigue: el emparejamiento parte de cero (C05 lo dice) |
 | Grupo del punteo previo que no suma 0 | sigue: se respeta, se avisa (A04) y el papel lo lista como descuadre del punteo contable |

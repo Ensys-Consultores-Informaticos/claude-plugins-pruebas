@@ -64,8 +64,18 @@ son solo el `.mdb` y los JSON.
 ### Paso 1 — Localizar el expediente y el diario
 
 ```
-configurar()                          # sin parámetros: ver estado
+configurar(perfil = "cuadro-mando-diario")   # primero: nombres de terceros tokenizados
 ```
+
+**Lo primero, antes de leer nada: `configurar(perfil = "cuadro-mando-diario")`.** Con el perfil, el
+MCP retira del extracto las columnas que este skill no necesita y **tokeniza los nombres de
+terceros** en todo lo que devuelve: verás `PROV 40000012` o `CLI 43000007` donde iría la razón
+social. El nombre no sale del equipo del auditor —ni al contenedor ni a este chat—; el papel lo
+recupera al final con `rehidratar`. Trabaja y habla **por cuenta y por token**: «la apertura de
+PROV 40001013 no cierra». **Nunca preguntes al auditor a quién corresponde un token ni lo
+adivines** por el concepto o por los importes: él lo lee en el papel. Si `configurar()` dice
+`nombres_terceros: en claro — forzado por el auditor`, es que lo ha apagado él; no lo
+vuelvas a encender tú.
 
 - Si falta `gs3_file`, **pide la ruta al usuario**. No la adivines.
 - Si la respuesta dice que el expediente **no tiene diario importado**, para aquí y
@@ -210,8 +220,13 @@ node <trabajo>/verificar_panel.js     # plantilla en assets/verificar_panel.js
    subcarpeta por skill, y esta es la única ruta donde el auditor los va a buscar—, con
    nombres que incluyan cliente y fecha de cierre:
    `panel_diario_<CLIENTE>_<cierre>.html`, `contrato_diario_...json`, etc.
-3. **Nunca** publiques el panel como artefacto ni lo subas a ninguna URL.
-4. **Borra los temporales**: `rm -rf "$TEMP/gesia-cuadro-mando" <trabajo>`. En
+3. **Los nombres.** El panel y los JSON se han escrito con tokens (`PROV 40000012`…). Ya en
+   el disco del auditor, llama a `rehidratar(ruta)` **sobre cada uno de los cinco ficheros**
+   —el `.html` y los cuatro `.json`—: sustituye los tokens por los nombres reales en local y
+   devuelve recuentos, ni un nombre vuelve aquí. Dile al auditor cuántas sustituciones y, si
+   hay `tokens_sin_nombre`, cuáles, sin completarlos tú.
+4. **Nunca** publiques el panel como artefacto ni lo subas a ninguna URL.
+5. **Borra los temporales**: `rm -rf "$TEMP/gesia-cuadro-mando" <trabajo>`. En
    `InformesGesia` solo debe quedar el panel y sus JSON. Si algo no se deja borrar, dilo con
    su ruta: son datos del cliente y no pueden quedarse por olvido.
 

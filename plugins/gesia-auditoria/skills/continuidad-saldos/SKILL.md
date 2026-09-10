@@ -73,9 +73,19 @@ decide solo y no hay que indicarle nada.
 ### Paso 1 — Expediente
 
 ```
-configurar()            # sin parámetros: ver estado
+configurar(perfil = "continuidad-saldos")   # primero: lista blanca y nombres tokenizados
 contexto_expediente()
 ```
+
+**Lo primero, antes de leer nada: `configurar(perfil = "continuidad-saldos")`.** Con el perfil, el
+MCP retira del extracto las columnas que este skill no necesita y **tokeniza los nombres de
+terceros** en todo lo que devuelve: verás `PROV 40000012` o `CLI 43000007` donde iría la razón
+social. El nombre no sale del equipo del auditor —ni al contenedor ni a este chat—; el papel lo
+recupera al final con `rehidratar`. Trabaja y habla **por cuenta y por token**: «la apertura de
+PROV 40001013 no cierra». **Nunca preguntes al auditor a quién corresponde un token ni lo
+adivines** por el concepto o por los importes: él lo lee en el papel. Si `configurar()` dice
+`nombres_terceros: en claro — forzado por el auditor`, es que lo ha apagado él; no lo
+vuelvas a encender tú.
 
 Si falta `gs3_file`, **pide la ruta**. Si el servidor API no responde, dile que lo
 arranque en *Herramientas > Gesia - Cuadro de mando > Arrancar servidor API*. Si
@@ -237,6 +247,16 @@ cada clase**. Si no hay ninguno, dilo así: la continuidad está comprobada y no
 hay diferencias. Y recuérdale que:
 
 - el papel es una propuesta y la revisión y la firma son suyas;
+
+**Los nombres.** El fichero se ha escrito con tokens. Cuando ya esté en el disco del auditor
+—en Cowork, después de bajarlo al expediente; en local, directamente—, llama a
+`rehidratar(ruta = "<expediente>/InformesGesia/…/<fichero>", leyenda = true)`: sustituye cada
+token por el nombre real, en local, y devuelve recuentos —ni un nombre vuelve aquí—. Con
+`leyenda = true` añade la tabla token → nombre (hoja «Tokens» en el Excel), para que lo que
+has dicho en el chat con tokens se pueda leer en el papel. **Cuéntale al auditor los dos
+números que devuelve** (sustituciones y tokens distintos) y, si hay `tokens_sin_nombre`,
+dilos tal cual: son cuentas que el diccionario no conoce, no las completes tú.
+
 **Los temporales.** Lo que haya escrito `exportar_consulta` lo borra
 `limpiar_exportaciones()`, y esa es la vía: funciona igual en local y en Cowork
 —lo borra el MCP, que corre en la máquina del usuario— y no hay que decirle qué

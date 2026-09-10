@@ -19,6 +19,16 @@ Para volver a producción: desactiva o desinstala este, reactiva el de `ensys` y
 
 ## Qué se prueba ahora
 
+**MCP 1.12.0 — confidencialidad, tickets 2 y 3 (plugin de pruebas 1.11.0, 10/09/2026).**
+`cancelacion-saldos`, `continuidad-saldos` y `cuadro-mando-diario` empiezan con
+`configurar(perfil=…)`: el MCP retira del extracto las columnas que el skill no necesita y
+**tokeniza los nombres de terceros** en todas sus salidas —`PROV 40000012`, `CLI 43000007`— para
+que la razón social no salga del equipo del auditor ni al contenedor ni al chat. Al entregar,
+`rehidratar(ruta, leyenda=true)` devuelve los nombres al papel ya en el disco del auditor (hoja
+«Tokens» con la equivalencia). `configurar(nombres="claro")` lo apaga. Qué probar: que el modelo
+ponga el perfil al empezar, hable por cuenta y token sin preguntar «quién es», y rehidrate al
+final; y que el papel llegue con nombres reales y la hoja Tokens.
+
 **MCP 1.11.1 (plugin de pruebas 1.10.3, 10/09/2026).** `configurar(gs3_anterior=…)` para el expediente
 del ejercicio anterior —`configurar()` lo sugiere en `gs3_anterior_sugerido` cuando existe `<mismo nombre>
 <año-1>.gs3` en la misma carpeta o en la hermana—, y `exportar_consulta` / `columnas` con
