@@ -259,7 +259,9 @@ esta frase y ninguna más:
 > lleva escritos se usan igual, viaje o no.*
 
 Si dice que sí: `configurar(concepto = true)` **antes** de exportar, y el fichero llevará
-`CONCEPTO` además de las dos derivadas. Si dice que no: no hay nada que configurar; el
+`CONCEPTO` además de las dos derivadas —con los DNI, CIF, IBAN, matrículas, teléfonos y
+correos que hubiera en el texto **enmascarados** como `[DNI]`, `[CIF]`…: eso lo hace el MCP
+siempre, y no hay que pedirlo ni intentar recuperarlos—. Si dice que no: no hay nada que configurar; el
 MCP ya retiene el texto por defecto. Sin respuesta, **no se exporta**. No hay tercera
 opción ni valor por defecto: es una decisión de confidencialidad y es suya.
 
