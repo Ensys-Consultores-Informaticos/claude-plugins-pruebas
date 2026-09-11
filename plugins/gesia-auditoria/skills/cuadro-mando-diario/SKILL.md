@@ -224,7 +224,9 @@ node <trabajo>/verificar_panel.js     # plantilla en assets/verificar_panel.js
    el disco del auditor, llama a `rehidratar(ruta)` **sobre cada uno de los cinco ficheros**
    —el `.html` y los cuatro `.json`—: sustituye los tokens por los nombres reales en local y
    devuelve recuentos, ni un nombre vuelve aquí. Dile al auditor cuántas sustituciones y, si
-   hay `tokens_sin_nombre`, cuáles, sin completarlos tú.
+   hay `tokens_sin_nombre`, cuáles, sin completarlos tú. Delante de él no se dice
+   «rehidratar»: se dice **desanonimizar**, y se le recuerda que la copia del chat está
+   anonimizada y la buena es la del expediente.
 4. **Nunca** publiques el panel como artefacto ni lo subas a ninguna URL.
 5. **Borra los temporales**: `rm -rf "$TEMP/gesia-cuadro-mando" <trabajo>`. En
    `InformesGesia` solo debe quedar el panel y sus JSON. Si algo no se deja borrar, dilo con

@@ -257,6 +257,18 @@ has dicho en el chat con tokens se pueda leer en el papel. **Cuéntale al audito
 números que devuelve** (sustituciones y tokens distintos) y, si hay `tokens_sin_nombre`,
 dilos tal cual: son cuentas que el diccionario no conoce, no las completes tú.
 
+Con este párrafo, y sin llamar «rehidratar» a nada delante del auditor —para él es
+**desanonimizar**—:
+
+> *Papel generado y archivado en el expediente: `InformesGesia\…\<fichero>` (también lo tienes
+> en el chat, aunque esa copia está anonimizada). Nombres ya desanonimizados: N sustituciones,
+> M terceros distintos, ninguno sin nombre, y hoja «Tokens» con la leyenda. El extracto
+> temporal está borrado.*
+
+Si hubo tokens sin nombre, en vez de «ninguno sin nombre» van listados. La copia del chat
+**siempre** está anonimizada —viajó por el contenedor—: dilo, para que no la confunda con el
+papel bueno.
+
 **Los temporales.** Lo que haya escrito `exportar_consulta` lo borra
 `limpiar_exportaciones()`, y esa es la vía: funciona igual en local y en Cowork
 —lo borra el MCP, que corre en la máquina del usuario— y no hay que decirle qué
