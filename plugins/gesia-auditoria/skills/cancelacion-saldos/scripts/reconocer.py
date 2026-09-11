@@ -164,7 +164,7 @@ def _informe(info: dict) -> list[str]:
         + ((" (derivado del concepto por el MCP, NumeroEnConcepto; "
             if str(cols.get("fuente_documento") or "").lower() == "numeroenconcepto"
             else f" (columna {cols.get('fuente_documento')}; ")
-           + f"{info['sin_documento']} apuntes sin numero)"
+           + f"{info['sin_documento']} apuntes sin numero utilizable: vacio o 0)"
            if cols["numero_documento"] else "  <-- SIN ESTO EL RESULTADO ES MUCHO PEOR"),
         *([("    columnas candidatas a numero, medidas SOBRE ESTE EXTRACTO (no se heredan de otro "
             "grupo del mismo diario): " + " · ".join(
@@ -243,13 +243,18 @@ def _informe(info: dict) -> list[str]:
                   "anterior de esas cuentas, y donde esta? Con el se puede atar factura por "
                   "factura, y cerrar aperturas pagadas solo en parte.",
                   ["No lo tengo", "Si, en esta ruta: ..."]))
-    P.append(("¿Como paga o cobra este cliente? Lo que digas cambia el tamaño de grupo que "
-              "se busca.",
+    # Estas dos respuestas NO entran en el calculo (no hay parametro que las lleve): son
+    # para leer bien el papel y para la entrega. Antes la pregunta prometia «cambia el
+    # tamaño de grupo que se busca», y era falso (registro del 10/09/2026).
+    P.append(("¿Como paga o cobra este cliente? No cambia el calculo: sirve para leer los "
+              "tamaños de grupo del papel (plazos = grupos de 3-4; remesas o confirming = "
+              "grupos grandes por acumulacion) y para decirlo al entregar.",
               ["Plazos (30/60/90)", "Remesas que agrupan varias facturas", "Confirming",
                "Pagos parciales", "No lo se"]))
     if cols["numero_documento"]:
-        P.append(("¿El numero de documento se reutiliza entre ejercicios? Si se reutiliza, hay "
-                  "que exigir ademas una ventana de fechas.",
+        P.append(("¿El numero de documento se reutiliza entre ejercicios? Un grupo por numero "
+                  "solo se acepta si suma cero, asi que no cambia el calculo; si se reutiliza, "
+                  "se avisa al entregar de que un grupo por documento puede juntar dos años.",
                   ["No", "Si", "No lo se"]))
 
     # El aviso va aqui y no solo en el SKILL.md porque esto es lo ultimo que el

@@ -194,9 +194,23 @@ API*. Si el expediente no tiene diario importado, **para**: sin diario no
 hay apuntes que cancelar.
 
 **Pregunta qué cuenta o grupo de cuentas quiere procesar**: una cuenta
-concreta, un grupo (43 clientes, 40 proveedores...), o varias cuentas
-sueltas. No asumas "todo el diario" — con miles de cuentas el papel sería
-enorme y la mayoría no tiene nada que cancelar.
+concreta, un grupo (43 clientes, 40 proveedores...), varias cuentas sueltas, o **las N
+con más apuntes de un grupo**. No asumas "todo el diario" — con miles de cuentas el
+papel sería enorme y la mayoría no tiene nada que cancelar.
+
+Para el «top N por apuntes», **el filtro de saldo vivo va antes del ranking**, no después:
+si se cogen las cinco más grandes y luego se filtra, una que cierre a cero deja el papel con
+cuatro hojas tras haber anunciado cinco (pasó el 10/09/2026). La consulta hecha:
+
+```
+consultar_diario(sql = "SELECT TOP 5 CUENTA, Count(*) AS N FROM Diario
+  WHERE CUENTA LIKE '400%'
+  GROUP BY CUENTA HAVING Abs(Sum(SALDO)) > 0.005
+  ORDER BY Count(*) DESC, CUENTA")
+```
+
+Con esas cuentas se escribe el `SELECT` del paso 2 con `CUENTA IN ('…','…')`, y el
+recuento que se le dice al auditor es el de esas cuentas.
 
 **«Salvo que ya lo haya dicho» significa en esta petición, no en cualquier
 momento de la conversación.** Un alcance mencionado antes y a otro
@@ -361,10 +375,16 @@ su raíz:
 exportar_consulta(..., ruta = "<raíz de la carpeta conectada>/_tmp_cowork/extracto.csv")
 ```
 
-Y **no dentro del expediente ni en `InformesGesia`**: ahí van los papeles
-que el auditor archiva, y un CSV con la contabilidad del cliente al lado
-del papel firmado es contabilidad ajena en la carpeta que se archiva.
-`device_list_dir` sirve para ver qué hay conectado si no lo tienes claro.
+Y **nunca en `InformesGesia`**: ahí van los papeles que el auditor archiva, y un
+CSV con la contabilidad del cliente al lado del papel firmado es contabilidad
+ajena en la carpeta que se archiva. `device_list_dir` sirve para ver qué hay
+conectado si no lo tienes claro.
+
+**Si la carpeta conectada ES el expediente** —lo habitual cuando el auditor conecta
+la carpeta del cliente—, no hay otra: `_tmp_cowork\` en la raíz del expediente, fuera
+de `InformesGesia`, y **al terminar `limpiar_exportaciones()` borra el fichero y la
+carpeta si queda vacía**. Dile al auditor que ahí ha habido contabilidad hasta el
+borrado, por si el expediente se sincroniza a la nube.
 
 Luego se sube y se trabaja con la copia del sandbox, que aparece bajo
 `/mnt/user-data/uploads/` con la misma ruta relativa:
@@ -444,9 +464,10 @@ Lo que cambia cada respuesta, para que sepas qué hacer con ella:
   porque el skill **no sabe barrer céntimos** y preguntar lo que después no se puede aplicar
   es peor que no preguntar (pasó dos veces). Se quedan pendientes y **se cuenta al entregar**,
   con el importe.
-- **Cómo paga o cobra el cliente** → confirma o desmiente lo que ya se ve en los tamaños de
-  grupo del reconocimiento. Si dice algo que el dato no muestra —remesas, confirming—, dilo
-  al entregar: es donde el papel se queda corto.
+- **Cómo paga o cobra el cliente** → **no cambia el cálculo**: no hay parámetro que lo lleve
+  al script, y la pregunta ya no promete que lo haya. Sirve para leer los tamaños de grupo del
+  papel y para la entrega: si dice algo que el dato no muestra —remesas, confirming—, dilo al
+  entregar: es donde el papel se queda corto.
 - **El número reutilizado entre ejercicios** → si dice que sí, avísalo al entregar: los
   grupos por documento siguen exigiendo suma cero, así que no se inventa nada, pero conviene
   que lo sepa.
