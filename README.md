@@ -19,6 +19,17 @@ Para volver a producción: desactiva o desinstala este, reactiva el de `ensys` y
 
 ## Qué se prueba ahora
 
+**MCP 1.14.0 — ticket 5: las facturas escaneadas se tachan en el equipo (plugin de pruebas 1.13.0, 15/09/2026).**
+En `fsp-mum`, al llegar a los documentos el skill pregunta **«¿Cómo subo las facturas? (1) Tachadas · (2) Tal
+cual»** con la consecuencia de cada una, y en los dos casos las imágenes las hace el MCP en el equipo del
+auditor con `preparar_facturas`: los PDF no salen del equipo, suben JPEG a 100 ppp. Tachadas: cabecera,
+nombre del emisor con su **token estampado** encima, CIF/IBAN/teléfono/correo/web, pie y márgenes en negro;
+importes, fechas y número quedan legibles. Tal cual: nada se tapa, el token va en una esquina. El lector
+transcribe el sello en `token` y el cruce lo usa en vez del nombre. Qué probar: una MUM o un cumplimiento con
+«tachadas» de punta a punta —que las imágenes que suben no lleven el nombre del emisor, que el papel salga
+igual que en claro (la calibración era 42/42 y 18/18), y qué tarda (unos 4 s por factura en el equipo)—; y
+otra con «tal cual», que el token en la esquina no estorbe. `fsp-cumplimiento` todavía no pregunta.
+
 **MCP 1.13.0 — la muestra de ForSampling tokenizada por la contrapartida (plugin de pruebas 1.12.0, 15/09/2026).**
 `fsp-mum` y `fsp-cumplimiento` tienen perfil: con `configurar(perfil=…)`, la muestra que exporta
 `exportar_consulta(entidad="muestra")` —y la que enseña `obtener_entidad`— sale con el tercero

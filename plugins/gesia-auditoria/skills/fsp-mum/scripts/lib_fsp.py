@@ -370,6 +370,19 @@ def _tokens_tercero(nombre) -> set[str]:
     return {t for t in s.split() if len(t) >= 3 and t not in _PALABRAS_VACIAS}
 
 
+def _mismo_tercero_doc(valor_fila, fac: dict) -> bool:
+    """El tercero de la fila frente al documento. Si la fila lleva un token (perfil del MCP) y
+    el documento trae el sello transcrito en 'token' —el MCP lo estampa al tachar—, comparan
+    los tokens, que es lo que devuelve el criterio de tercero al cruce (confidencialidad 4.9).
+    Si no, los nombres, como siempre."""
+    tok_fila = str(valor_fila or "").strip()
+    tok_doc = str((fac or {}).get("token") or "").strip()
+    if tok_doc and _RE_TOKEN_TERCERO.match(tok_fila):
+        norm = lambda t: re.sub(r"\s+", " ", t).strip().lower()
+        return norm(tok_fila) == norm(tok_doc)
+    return _mismo_tercero(valor_fila, (fac or {}).get("proveedor"))
+
+
 def _mismo_tercero(a, b) -> bool:
     """El tercero del apunte y el emisor del documento comparten al menos una palabra
     significativa ('ALFA, Lda.' / 'ALFA, LDA.'; 'PERNOSA' / 'PERFILES NAVARRA, S.L.
@@ -488,7 +501,7 @@ def _puntuar(fila: dict, cols: dict, fac: dict) -> dict:
 
     tipo_num = _mismo_numero(num_fila, num_fac) if (num_fila and num_fac) else ""
     numero = tipo_num == "exacto"
-    tercero = _mismo_tercero(fila.get(cols.get("tercero")), fac.get("proveedor")) if cols.get("tercero") else False
+    tercero = _mismo_tercero_doc(fila.get(cols.get("tercero")), fac) if cols.get("tercero") else False
     importe = None
     diferencia = None
     if imp is not None:
@@ -637,7 +650,7 @@ def _parejas_candidatas(filas: list[dict], sin_fila: list[dict], cols: dict) -> 
         fila = it["fila"]
         f_fila = parse_fecha(fila.get(cols.get("fecha")))
         for fac in sin_fila:
-            mismo = _mismo_tercero(fila.get(cols.get("tercero")), fac.get("proveedor")) if cols.get("tercero") else False
+            mismo = _mismo_tercero_doc(fila.get(cols.get("tercero")), fac) if cols.get("tercero") else False
             f_fac = parse_fecha(fac.get("fecha"))
             dias = (f_fila - f_fac).days if (f_fila and f_fac) else None
             cerca = dias is not None and abs(dias) <= VENTANA_DIAS

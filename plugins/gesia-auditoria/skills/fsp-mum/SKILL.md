@@ -114,15 +114,11 @@ token ni lo adivines** por el documento: él lo lee en el papel. Si `configurar(
 `nombres_terceros: en claro — forzado por el auditor`, es que lo ha apagado él; no lo vuelvas a
 encender tú.
 
-**Las facturas escaneadas, hoy, suben tal cual**: llevan la razón social del emisor, y el
-lector la transcribe en `proveedor`. Díselo al auditor en una línea al empezar, sin dramatizar
-y sin preguntar —todavía no hay alternativa—: *«La muestra viaja con los terceros anonimizados;
-las facturas escaneadas se leen tal cual, con el nombre del emisor»*. La consecuencia técnica:
-con la muestra tokenizada y la factura en claro, **el cruce no puede usar el tercero** y ata por
-importe, número y fecha. En la calibración eso cuesta un elemento de 42 —justo el de importe
-distinto—, que aparece como «sin documento» con un documento sobrante al lado: el paso 3 dice
-cómo se ata a mano con `poblacion_id`. Si el auditor prefiere el cruce completo a costa de que
-los nombres viajen, el interruptor es suyo: `configurar(nombres = "claro")`.
+**Las facturas escaneadas las decide el auditor, en el paso 3**: tachadas en su equipo antes
+de subir, o tal cual. Con el perfil puesto, las prepara el MCP en cualquiera de los dos casos y
+en las dos va estampado el token del emisor, así que el cruce conserva el tercero. Si el auditor
+prefiere que tampoco la muestra viaje anonimizada, el interruptor es suyo:
+`configurar(nombres = "claro")`.
 
 **El diario, cuando el fichero activo es un `.cli`.** El `.cli` no vincula diario, y el MCP
 necesita el diario del que salió la población para encontrar la contrapartida. `configurar()`
@@ -203,13 +199,51 @@ ficheros pero no la carpeta, y quedan directorios vacíos por ahí.
 
 Pide la carpeta con los documentos escaneados de la prueba (suele estar en
 `Documentacion\<ejercicio>\<área>` del expediente, y a veces en una subcarpeta
-`Facturas` dentro de ella; el script busca en profundidad).
+`Facturas` dentro de ella; se busca en profundidad).
+
+**Y pregunta cómo quiere las facturas, con las dos opciones y su consecuencia**, como una
+pregunta con opciones y no como texto:
+
+> *¿Cómo subo las facturas escaneadas para leerlas?*
+> *Opciones: **(1) Tachadas** — el nombre del emisor, la cabecera, los identificadores (CIF,
+> IBAN, teléfono, correo, web), el pie y los márgenes salen en negro en tu equipo antes de
+> subir; el modelo lee importes, fechas y número, y en vez del nombre ve el mismo código que en
+> la muestra. **(2) Tal cual** — la factura sube completa, con el nombre del emisor, y puedes
+> pedirme que revise su contenido; el código del emisor va en una esquina.*
+
+Es su decisión y hay que hacerla sabiendo lo que implica; no la tomes tú ni la des por hecha de
+una sesión a otra. **Con el perfil puesto, en los dos casos las imágenes las hace el MCP** en el
+equipo del auditor, y a la nube solo suben esas imágenes, nunca los PDF:
+
+```
+preparar_facturas(carpeta = "<la carpeta>",
+                  destino = "<raíz de la carpeta conectada>\\_tmp_cowork\\facturas",
+                  modo = "tachadas" | "claras",
+                  terceros = [<los tokens de tercero de la muestra exportada, sin repetir>])
+```
+
+`terceros` son los candidatos a emisor: pásalos siempre —salen de `muestra.json`—, porque sin
+ellos el casado va contra el diccionario entero y es menos fiable. La respuesta trae recuentos:
+cuántos documentos, cuántos con token estampado, cuántos sin casar (esos irán por importe,
+número y fecha), qué se ha tapado y cuántos ficheros se han apartado como justificantes. Tarda
+unos 4 segundos por documento: dilo si son muchos. Trasládale al auditor los recuentos en una
+línea, sin nombres, que no los hay.
+
+Deja en `destino` un JPEG por página a 100 ppp y un `manifiesto.json` que
+`preparar_documentos.py` lee tal cual: **sube esa carpeta** (en Cowork, `device_stage_files`
+sobre `_tmp_cowork\facturas`) y trabaja con la copia del sandbox como `$DATOS`. Los pasos
+siguientes —`--lotes`, `--fusionar`, `--estado`— son los mismos. **`--ampliar` no**: con
+imágenes del MCP, la página que falte se pide otra vez al MCP con `documentos=["<fichero>"]`
+y `paginas=[-1]`, y se vuelve a subir.
+
+**Sin perfil** —o si `preparar_facturas` no existe porque el MCP es anterior a la 1.14.0—, el
+script del skill renderiza él, en claro:
 
 ```bash
 python "$SKILL/scripts/preparar_documentos.py" --carpeta "<la carpeta>" --trabajo "$DATOS"
 ```
 
-Inventaría los PDF, aparta los justificantes de pago y **renderiza a PNG la primera página
+Inventaría los PDF, aparta los justificantes de pago y **renderiza la primera página
 de cada documento**, a 100 puntos por pulgada. No renderiza el resto a propósito: de una
 factura interesan la primera página, que lleva la identidad, y la última, que suele llevar
 los totales. Una página cuesta unos 1.290 tokens.
@@ -440,6 +474,8 @@ unidad de muestreo, tamaño de la población, error tolerable y fecha de generac
 | Sin PyMuPDF ni `pdftoppm` | `preparar_documentos.py` **para** y lo dice; camino alterno, abrir los PDF directamente |
 | Sin evaluación del auditor | sigue: no hay comparación que imprimir |
 | Fichero activo `.cli` y el auditor no sabe dónde está el diario | sigue: la muestra sale con tokens de reserva `TER h…`, el cruce va sin tercero, y el papel lo dice |
+| Una factura tachada sin token (el emisor no casó con ningún tercero: logo sin texto, nombre distinto al del diario) | sigue: ese documento se cruza por importe, número y fecha, y si queda «sin documento» se ata con `poblacion_id` |
+| El MCP no tiene `preparar_facturas` (anterior a la 1.14.0) | sigue en claro con `preparar_documentos.py --carpeta`, y se dice que las facturas no van tachadas |
 | El `.smn` indicado no es el de la población | **para** en el paso 2 con «ese diario no es el de esta población»: se pide otra vez, no se busca otro |
 | `rehidratar` devuelve `tokens_sin_nombre` | sigue: el papel se entrega con esos tokens tal cual y se dicen al auditor; no se completan a mano |
 | Fichero de salida abierto en Excel | **para** al guardar, y dice que hay que cerrarlo |

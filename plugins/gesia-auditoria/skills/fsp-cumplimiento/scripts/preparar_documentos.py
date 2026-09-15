@@ -250,6 +250,13 @@ def _transcritos(trabajo: Path) -> set[str]:
     return {x.get("fichero") for x in d.get("facturas", []) if x.get("fichero")}
 
 
+def _imagenes_abs(trabajo: Path, imagenes: list) -> list[str]:
+    """Las imagenes del manifiesto con ruta absoluta. Las que hizo el MCP en el equipo del
+    auditor (preparar_facturas) van con el nombre a secas, relativo al manifiesto: asi la
+    misma carpeta vale en Windows y, subida, en el contenedor."""
+    return [i if Path(i).is_absolute() else str(trabajo / i) for i in imagenes]
+
+
 def repartir_lotes(trabajo: Path, tamano: int) -> list[dict]:
     """Los documentos pendientes de transcribir, en lotes de `tamano`.
 
@@ -266,7 +273,7 @@ def repartir_lotes(trabajo: Path, tamano: int) -> list[dict]:
         n = len(lotes) + 1
         lotes.append({"lote": n,
                       "salida": str(trabajo / f"facturas_lote_{n}.json"),
-                      "documentos": [{"fichero": d["fichero"], "imagenes": d["imagenes"],
+                      "documentos": [{"fichero": d["fichero"], "imagenes": _imagenes_abs(trabajo, d["imagenes"]),
                                       "paginas": d["paginas"]} for d in pend[i:i + tamano]]})
     (trabajo / "lotes.json").write_text(json.dumps(lotes, ensure_ascii=False, indent=1), encoding="utf-8")
     return lotes
@@ -380,6 +387,13 @@ def main() -> int:
         if doc is None:
             print(f"[C] No está en el manifiesto: {a.ampliar}")
             return 2
+        if man.get("origen") == "mcp":
+            # Las imagenes las hizo el MCP en el equipo del auditor, tachadas: aqui no hay
+            # PDF que renderizar, y renderizarlo saltaria el tachado.
+            print(f"Las imágenes de este manifiesto las hizo el MCP (preparar_facturas, modo {man.get('modo', '?')}). "
+                  f"Pide la página con el MCP: preparar_facturas(carpeta=..., destino=..., modo=\"{man.get('modo', 'tachadas')}\", "
+                  f"documentos=[\"{doc['fichero']}\"], paginas=[{a.pagina or -1}]), vuelve a subir la carpeta y sigue.")
+            return 0
         n = a.pagina or doc["paginas"]
         try:
             imgs = _renderizar(Path(doc["ruta"]), [n], trabajo / "pag", doc["id"])

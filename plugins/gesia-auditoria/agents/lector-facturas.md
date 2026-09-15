@@ -27,11 +27,17 @@ dato de contexto, y **no busques ni abras nada que no esté en esa lista**.
 Una entrada por fichero, con exactamente estas claves:
 
 ```json
-{"fichero": "<tal cual te lo dan>", "proveedor": "", "cif": "", "numero": "", "fecha": "DD/MM/AAAA",
+{"fichero": "<tal cual te lo dan>", "proveedor": "", "cif": "", "token": "", "numero": "", "fecha": "DD/MM/AAAA",
  "concepto": "", "base": "", "pct_iva": "", "iva": "", "irpf": "", "total": "",
  "albaranes": [], "paginas": 0, "notas": ""}
 ```
 
+- `token`: **si la imagen lleva un sello** con un código del tipo `PROV 40000012`, `CLI 43000007`
+  o `TER h3f9a2c` —letras blancas sobre una banda negra, normalmente donde iría el nombre del
+  emisor o en una esquina—, escríbelo tal cual, con su espacio. Es la marca que el equipo del
+  auditor ha puesto al tachar la factura, y sustituye al nombre: si la factura viene tachada,
+  `proveedor` y `cif` quedan vacíos y el `token` es lo que ata el documento a su apunte. **No lo
+  confundas con el número de factura** ni lo copies en `numero`. Sin sello, vacío.
 - Importes **como los imprime el documento**, con coma decimal y sin símbolo: `12500,00`.
 - `numero` **tal como lo escribe el proveedor**, con su serie, barras y guiones: `FA25/00042`,
   `B/17`, `PF-2025000777`. No lo normalices: eso lo hace el cruce.
