@@ -43,6 +43,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import re
 from pathlib import Path
 
 PPP = 100                  # puntos por pulgada del render
@@ -165,6 +166,29 @@ def _renderizar(pdf: Path, paginas: list[int], destino: Path, prefijo: str) -> l
     return escritos
 
 
+def _paginas_sin_libreria(datos: bytes) -> int:
+    """Numero de paginas leido de los bytes del PDF, sin ninguna libreria.
+
+    Primero el /Count del nodo raiz del arbol de paginas (/Type /Pages): es exacto
+    aunque el fichero lleve guardados incrementales, que repiten los objetos. Solo
+    si no aparece se cuentan los objetos /Type /Page, que es lo que se hacia antes y
+    dio «4 paginas» en un documento de una («Pagina 1/1» en el pie): el escaner habia
+    guardado el PDF varias veces y cada guardado repetia la pagina. Medido el
+    15/09/2026 en una MUM real, en el contenedor de Cowork, donde no hay PyMuPDF.
+    """
+    cuentas = []
+    for m in re.finditer(rb"<<(.{0,400}?)>>", datos, re.S):
+        d = m.group(1)
+        if re.search(rb"/Type\s*/Pages\b", d) and not re.search(rb"/Parent\b", d):
+            c = re.search(rb"/Count\s+(\d+)", d)
+            if c:
+                cuentas.append(int(c.group(1)))
+    if cuentas:
+        return max(max(cuentas), 1)
+    n = len(re.findall(rb"/Type\s*/Page\b", datos))
+    return max(n, 1)
+
+
 def _paginas_de(pdf: Path) -> int:
     try:
         import fitz
@@ -175,12 +199,12 @@ def _paginas_de(pdf: Path) -> int:
             doc.close()
     except ImportError:
         pass
-    # Sin libreria: contar los objetos de pagina del propio fichero. Basta para
-    # decidir si hay una ultima pagina distinta de la primera.
-    datos = pdf.read_bytes()
-    n = datos.count(b"/Type /Page") + datos.count(b"/Type/Page")
-    n -= datos.count(b"/Type /Pages") + datos.count(b"/Type/Pages")
-    return max(n, 1)
+    try:
+        from pypdf import PdfReader
+        return max(len(PdfReader(str(pdf)).pages), 1)
+    except Exception:
+        pass
+    return _paginas_sin_libreria(pdf.read_bytes())
 
 
 def inventariar(carpeta: Path, trabajo: Path) -> dict:

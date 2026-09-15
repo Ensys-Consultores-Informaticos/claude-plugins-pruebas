@@ -356,6 +356,22 @@ def main() -> int:
        and not any(f["criterios"]["tercero"] for f in _cr_tok["filas"]),
        "con la muestra tokenizada el cruce ata por importe lo mismo que antes, y ninguna fila casa por tercero")
 
+    # -- el conteo de paginas sin libreria: el /Count del arbol manda sobre los objetos repetidos
+    import preparar_documentos as _pd
+    _pdf_inc = (b"%PDF-1.4\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n"
+                b"2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n"
+                b"3 0 obj << /Type /Page /Parent 2 0 R >> endobj\n"
+                b"3 0 obj << /Type /Page /Parent 2 0 R >> endobj\n"      # guardado incremental: la misma pagina otra vez
+                b"3 0 obj << /Type /Page /Parent 2 0 R >> endobj\n"
+                b"3 0 obj << /Type /Page /Parent 2 0 R >> endobj\n%%EOF")
+    _pdf_tres = (b"%PDF-1.4\n2 0 obj << /Type /Pages /Kids [3 0 R 4 0 R 5 0 R] /Count 3 >> endobj\n"
+                 b"3 0 obj << /Type /Page /Parent 2 0 R >> endobj\n4 0 obj << /Type /Page /Parent 2 0 R >> endobj\n"
+                 b"5 0 obj << /Type /Page /Parent 2 0 R >> endobj\n%%EOF")
+    _pdf_sin = b"%PDF-1.4\n3 0 obj << /Type /Page >> endobj\n4 0 obj << /Type /Page >> endobj\n%%EOF"
+    ok(_pd._paginas_sin_libreria(_pdf_inc) == 1 and _pd._paginas_sin_libreria(_pdf_tres) == 3
+       and _pd._paginas_sin_libreria(_pdf_sin) == 2 and _pd._paginas_sin_libreria(b"") == 1,
+       "sin libreria, las paginas salen del /Count del arbol: un PDF con la pagina repetida por guardados incrementales es 1, no 4")
+
     # -- la libreria compartida no puede derivar entre skills
     propia = Path(__file__).resolve().parent / "lib_fsp.py"
     hermana = Path(__file__).resolve().parents[2] / "fsp-cumplimiento" / "scripts" / "lib_fsp.py"

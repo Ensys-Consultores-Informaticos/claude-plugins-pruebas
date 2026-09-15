@@ -96,6 +96,12 @@ configurar(perfil = "fsp-mum")   # primero: el tercero de la muestra, tokenizado
 contexto_expediente()
 ```
 
+Si la primera llamada al MCP falla con **«Connection closed»** o **«Server … unavailable»**,
+**reintenta hasta tres veces** antes de decir nada: el conector tarda unos segundos en
+arrancar y la primera petición puede llegar antes. Medido el 15/09/2026: dos fallos seguidos
+y la tercera respondió, sin que el usuario tocara nada. Si a la tercera sigue igual, entonces
+sí: pídele que reinicie Claude del todo, que es lo que lo arregla cuando no es el arranque.
+
 **Lo primero, antes de leer nada: `configurar(perfil = "fsp-mum")`.** Con el perfil, la muestra
 que exporta el MCP lleva el tercero de cada elemento como **token** —`PROV 40000012`,
 `CLI 43000007`— en vez de la razón social, y cualquier otra columna de texto de la fila pierde
@@ -219,7 +225,11 @@ python "$SKILL/scripts/preparar_documentos.py" --trabajo "$DATOS" --lotes 10
 ```
 
 Escribe `lotes.json` y te imprime cada lote con sus imágenes y la ruta donde ese lector
-tiene que dejar su resultado (`facturas_lote_N.json`). Lanza **un agente por lote, todos en
+tiene que dejar su resultado (`facturas_lote_N.json`). **Los lotes son los que imprime el
+script, no los partas tú**: con diez documentos o menos es un solo lote —un solo lector, o
+léelos tú en línea, que para seis facturas cuesta lo mismo—; el paralelismo paga a partir de
+dos o tres lotes, y tres agentes para seis documentos es más coordinación que lectura
+(observado el 15/09/2026). Lanza **un agente por lote, todos en
 la misma tanda**, hasta cuatro a la vez; a cada uno le pasas en el prompt **el nombre de la entidad
 auditada** (el de `contexto_expediente`), la lista de sus documentos con las imágenes y la
 ruta de salida, y nada más: ni la muestra, ni los importes de libros. El nombre de la entidad
@@ -440,7 +450,7 @@ unidad de muestreo, tamaño de la población, error tolerable y fecha de generac
 python "$SKILL/scripts/probar_mum.py"
 ```
 
-No hace falta ForSampling ni un solo PDF: 59 comprobaciones sobre un fixture sintético de
+No hace falta ForSampling ni un solo PDF: 60 comprobaciones sobre un fixture sintético de
 ocho elementos elegidos por lo que puede salir mal en una MUM —gasto por la base, diferencia
 real con su tasa, sin documento, contabilizado por el total, ingreso con saldo negativo,
 ingreso negativo con diferencia, documento sin total legible cuya diferencia es justo la

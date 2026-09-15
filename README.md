@@ -36,6 +36,9 @@ con `rehidratar(…, leyenda=true)`. `fsp-cumplimiento` todavía no. Qué probar
 en el chat no aparezca ninguna razón social de la muestra, que el papel del expediente llegue con nombres
 reales y hoja «Tokens», y que el elemento con importe distinto salga como «sin documento» con su documento
 sobrante al lado (el cruce va sin tercero hasta que las facturas lleven el token estampado).
+**1.12.2 (15/09/2026), del primer registro de ejecución:** reintentar `configurar` hasta tres veces ante
+«Connection closed»; los lotes del lector son los que imprime el script (seis facturas, un lote); y el conteo
+de páginas sin PyMuPDF lee el `/Count` del PDF, no los objetos repetidos (daba 4 en un documento de una).
 
 **MCP 1.12.0 — confidencialidad, tickets 2 y 3 (plugin de pruebas 1.11.0, 10/09/2026).**
 `cancelacion-saldos`, `continuidad-saldos` y `cuadro-mando-diario` empiezan con
