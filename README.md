@@ -19,6 +19,20 @@ Para volver a producción: desactiva o desinstala este, reactiva el de `ensys` y
 
 ## Qué se prueba ahora
 
+**MCP 1.13.0 — la muestra de ForSampling tokenizada por la contrapartida (plugin de pruebas 1.12.0, 15/09/2026).**
+`fsp-mum` y `fsp-cumplimiento` tienen perfil: con `configurar(perfil=…)`, la muestra que exporta
+`exportar_consulta(entidad="muestra")` —y la que enseña `obtener_entidad`— sale con el tercero
+de cada fila como token. En una población de compras la columna «cuenta» es la de gasto (60x), así
+que la cuenta del proveedor se busca como **contrapartida del asiento en el diario** (`NN_Contrapartida`
+si existe; si no, la única 40/41 del asiento), y sin contrapartida o sin diario queda un token de
+reserva `TER h…` que también rehidrata. Con un `.cli` activo el diario **lo indica el auditor**:
+`configurar(smn_file=…)`, y `consultar_diario` se lo pide con la frase «necesito la contrapartida…».
+El resumen de la exportación dice cuántos tokens salen por cuenta propia, por contrapartida y de
+reserva, y cuántos asientos casan en el diario; si ninguno casa, error: «ese diario no es el de esta
+población». Qué probar: que el modelo ponga el perfil, pida la ruta del diario al auditor cuando el
+fichero activo es un `.cli`, y que en el extracto no quede ningún nombre de tercero. **Los skills
+`fsp-*` todavía no usan esto** —el papel no rehidrata—: esta versión prueba solo la pieza del MCP.
+
 **MCP 1.12.0 — confidencialidad, tickets 2 y 3 (plugin de pruebas 1.11.0, 10/09/2026).**
 `cancelacion-saldos`, `continuidad-saldos` y `cuadro-mando-diario` empiezan con
 `configurar(perfil=…)`: el MCP retira del extracto las columnas que el skill no necesita y
