@@ -342,6 +342,20 @@ def main() -> int:
         ok((_fl - _fd).days == e1["criterios"]["dias"],
            "y la resta de las celdas da lo MISMO que el cruce en Python: el papel no se desvia")
 
+    # -- el tercero llega tokenizado por el MCP (perfil fsp-mum): PROV/CLI + cuenta, o TER h...
+    import lib_fsp as _lf
+    ok(_lf._tokens_tercero("PROV 40000012") == set() and _lf._tokens_tercero("TER h3f9a2c") == set()
+       and not _lf._mismo_tercero("PROV 40000012", "PROVEEDORES DEL NORTE, S.L.")
+       and _lf._mismo_tercero("Alfa Lda", "ALFA, LDA."),
+       "un tercero tokenizado no tiene palabras que casar: el criterio se apaga sin casar nada por casualidad")
+    _tok = [dict(f, **{cols["tercero"]: "PROV 4000" + str(i).zfill(4)}) for i, f in enumerate(MUESTRA)]
+    _cr_tok = cruzar(_tok, FACTURAS, cols)
+    _por_importe = {i for i, f in enumerate(cruce["filas"]) if f["factura"] and f["criterios"]["importe"]}
+    ok(all(_cr_tok["filas"][i]["factura"] is not None
+           and _cr_tok["filas"][i]["factura"]["fichero"] == cruce["filas"][i]["factura"]["fichero"] for i in _por_importe)
+       and not any(f["criterios"]["tercero"] for f in _cr_tok["filas"]),
+       "con la muestra tokenizada el cruce ata por importe lo mismo que antes, y ninguna fila casa por tercero")
+
     # -- la libreria compartida no puede derivar entre skills
     propia = Path(__file__).resolve().parent / "lib_fsp.py"
     hermana = Path(__file__).resolve().parents[2] / "fsp-cumplimiento" / "scripts" / "lib_fsp.py"

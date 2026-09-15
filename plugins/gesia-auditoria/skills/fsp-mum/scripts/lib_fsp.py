@@ -355,7 +355,16 @@ _PALABRAS_VACIAS = {"sa", "sl", "slu", "lda", "ltda", "spa", "srl", "gmbh", "bv"
                     "del", "la", "el", "los", "las", "and", "co", "cia", "hnos", "hermanos", "unipessoal"}
 
 
+_RE_TOKEN_TERCERO = re.compile(r"^\s*(?:PROV|CLI|TER) (?:\d{3,}|h[0-9a-f]{6})\s*$")
+
+
 def _tokens_tercero(nombre) -> set[str]:
+    # Con el perfil del MCP el tercero de la muestra llega como token («PROV 40000012»,
+    # «TER h3f9a2c»): no es un nombre y no tiene palabras que casar con el emisor del
+    # documento. Vacio: el criterio de tercero queda apagado para esa fila, sin casar
+    # nada por casualidad. docs/confidencialidad.md 4.9.
+    if _RE_TOKEN_TERCERO.match(str(nombre or "")):
+        return set()
     s = re.sub(r"[^a-z0-9 ]", " ", str(nombre or "").lower()
                .replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u"))
     return {t for t in s.split() if len(t) >= 3 and t not in _PALABRAS_VACIAS}

@@ -92,9 +92,40 @@ y lleva la cuenta de lo transcrito), `verificar_contrato.py`, `generar_papel.py`
 ### Paso 1 — Expediente, cliente de muestreo y prueba
 
 ```
-configurar()            # sin parámetros: ver estado
+configurar(perfil = "fsp-mum")   # primero: el tercero de la muestra, tokenizado
 contexto_expediente()
 ```
+
+**Lo primero, antes de leer nada: `configurar(perfil = "fsp-mum")`.** Con el perfil, la muestra
+que exporta el MCP lleva el tercero de cada elemento como **token** —`PROV 40000012`,
+`CLI 43000007`— en vez de la razón social, y cualquier otra columna de texto de la fila pierde
+las palabras del nombre. El token es la cuenta del tercero, que en una población de compras no
+es la de la fila (esa es la de gasto) sino **la contrapartida del asiento en el diario**; el MCP
+la busca solo. El nombre no sale del equipo del auditor —ni al contenedor ni a este chat—; el
+papel lo recupera al final con `rehidratar`. Trabaja y habla **por token**: «el elemento 301,
+PROV 40000012, sale 116,00 por debajo». **Nunca preguntes al auditor a quién corresponde un
+token ni lo adivines** por el documento: él lo lee en el papel. Si `configurar()` dice
+`nombres_terceros: en claro — forzado por el auditor`, es que lo ha apagado él; no lo vuelvas a
+encender tú.
+
+**Las facturas escaneadas, hoy, suben tal cual**: llevan la razón social del emisor, y el
+lector la transcribe en `proveedor`. Díselo al auditor en una línea al empezar, sin dramatizar
+y sin preguntar —todavía no hay alternativa—: *«La muestra viaja con los terceros anonimizados;
+las facturas escaneadas se leen tal cual, con el nombre del emisor»*. La consecuencia técnica:
+con la muestra tokenizada y la factura en claro, **el cruce no puede usar el tercero** y ata por
+importe, número y fecha. En la calibración eso cuesta un elemento de 42 —justo el de importe
+distinto—, que aparece como «sin documento» con un documento sobrante al lado: el paso 3 dice
+cómo se ata a mano con `poblacion_id`. Si el auditor prefiere el cruce completo a costa de que
+los nombres viajen, el interruptor es suyo: `configurar(nombres = "claro")`.
+
+**El diario, cuando el fichero activo es un `.cli`.** El `.cli` no vincula diario, y el MCP
+necesita el diario del que salió la población para encontrar la contrapartida. `configurar()`
+lo dice en `diario`. Pregúntaselo al auditor con esta frase, tal cual: *«Necesito la
+contrapartida de cada elemento para tokenizar al tercero; la saco del diario directamente si me
+indicas dónde está —el .smn que importó ForSampling, normalmente en `Muestreo\SesionesImportacion`—»*.
+Pásala con `configurar(smn_file = "<ruta>")`. Si no lo tiene o no lo sabe, **sigue**: la muestra
+saldrá con tokens de reserva (`TER h…`) y el papel lo hace constar. Con un `.gs3` activo no hay
+nada que preguntar: el diario es el del expediente.
 
 Si el fichero activo es un `.gs3`, `configurar` deduce solo el `.cli` del cliente de
 muestreo (`cli_file`). Si dice «sin cliente de muestreo vinculado», pregunta al usuario si
@@ -133,6 +164,14 @@ una incorrección.
 `parametros.json` trae, además del tipo de prueba, el contexto que va al encabezado del
 papel: unidad de muestreo, número de elementos de la población, **error tolerable** y
 tamaño de muestra deseado. Guárdalo tal cual, sin recortarlo.
+
+**Lee el resumen de la exportación de la muestra.** Trae dos líneas nuevas con el perfil:
+`muestra_tokenizada` —cuántos terceros llevan token por su cuenta, cuántos por la contrapartida
+del diario y cuántos de reserva— y `diario_comprobado` —cuántos asientos de la muestra están en
+el diario y casan en importe—. Trasládalas al auditor en una línea. Si en vez de resumen viene
+el error **«ese diario no es el de esta población»**, la ruta que te dieron no es la del diario
+del que salió la población: pídesela otra vez, y **no busques otro `.smn` por tu cuenta** aunque
+haya varios en la carpeta. Si dice `SIN DIARIO`, es lo del paso 1: tokens de reserva y adelante.
 
 **Dónde es `<DATOS>` no depende del producto, depende de una propiedad**: si los scripts y
 el MCP comparten disco. Compruébalo por la ruta que te devuelve `configurar`, no por dónde
@@ -318,6 +357,28 @@ Di dónde ha quedado el fichero y, **antes que nada**:
 Si había evaluación del auditor, traslada las cifras de la comparación. La que importa es
 **«el skill da 0 y el auditor puso error»**: incorrecciones que se habrían dejado pasar.
 
+**Los nombres.** El papel se ha escrito con tokens en las columnas de la muestra (la columna del
+documento leído, `Proveedores`, lleva lo que decía la factura). Cuando ya esté en el disco del
+auditor —en Cowork, después de bajarlo al expediente con `device_commit_files`; en local,
+directamente—, llama a `rehidratar(ruta = "<expediente>/InformesGesia/FspMum/<fichero>",
+leyenda = true)`: sustituye cada token por el nombre real, en local, y devuelve recuentos —ni un
+nombre vuelve aquí—. Con `leyenda = true` añade la hoja «Tokens» con la equivalencia, para que
+lo que has dicho en el chat con tokens se pueda leer en el papel. **Cuéntale al auditor los dos
+números que devuelve** (sustituciones y tokens distintos) y, si hay `tokens_sin_nombre`, dilos tal
+cual: no los completes tú. Los tokens de reserva `TER h…` rehidratan igual: su nombre es el texto
+del apunte, que el diccionario guardó al tokenizar.
+
+Sin llamar «rehidratar» a nada delante del auditor —para él es **desanonimizar**—:
+
+> *Papel generado y archivado en el expediente: `InformesGesia\FspMum\<fichero>` (también lo
+> tienes en el chat, aunque esa copia está anonimizada). Nombres ya desanonimizados: N
+> sustituciones, M terceros distintos, ninguno sin nombre, y hoja «Tokens» con la leyenda. Los
+> temporales están borrados.*
+
+La copia del chat **siempre** está anonimizada —viajó por el contenedor—: dilo, para que no la
+confunda con el papel bueno. **El diccionario de nombres no se borra**: vive con el encargo,
+cifrado, y es lo que permite rehidratar un papel de hace días.
+
 **Lo que no digas**: el error proyectado, el error neto, si se supera el error tolerable, o
 si la prueba pasa. Nada de eso sale de este papel.
 
@@ -368,6 +429,9 @@ unidad de muestreo, tamaño de la población, error tolerable y fecha de generac
 | Un elemento sin documento y un documento sobrante del mismo tercero | sigue, y el script lo señala como POSIBLE DIFERENCIA con las cifras: se ata con `poblacion_id` |
 | Sin PyMuPDF ni `pdftoppm` | `preparar_documentos.py` **para** y lo dice; camino alterno, abrir los PDF directamente |
 | Sin evaluación del auditor | sigue: no hay comparación que imprimir |
+| Fichero activo `.cli` y el auditor no sabe dónde está el diario | sigue: la muestra sale con tokens de reserva `TER h…`, el cruce va sin tercero, y el papel lo dice |
+| El `.smn` indicado no es el de la población | **para** en el paso 2 con «ese diario no es el de esta población»: se pide otra vez, no se busca otro |
+| `rehidratar` devuelve `tokens_sin_nombre` | sigue: el papel se entrega con esos tokens tal cual y se dicen al auditor; no se completan a mano |
 | Fichero de salida abierto en Excel | **para** al guardar, y dice que hay que cerrarlo |
 
 ## Comprobar que el skill funciona
@@ -376,11 +440,12 @@ unidad de muestreo, tamaño de la población, error tolerable y fecha de generac
 python "$SKILL/scripts/probar_mum.py"
 ```
 
-No hace falta ForSampling ni un solo PDF: 23 comprobaciones sobre un fixture sintético de
+No hace falta ForSampling ni un solo PDF: 59 comprobaciones sobre un fixture sintético de
 ocho elementos elegidos por lo que puede salir mal en una MUM —gasto por la base, diferencia
 real con su tasa, sin documento, contabilizado por el total, ingreso con saldo negativo,
 ingreso negativo con diferencia, documento sin total legible cuya diferencia es justo la
 cuota de IVA, y un elemento sin importe—. Comprueba además que el término de comparación sale
 de la muestra, que **los errores no se netean nunca**, que se detecta el caso en que el skill
-da 0 donde el auditor puso error, y que `lib_fsp.py` es byte a byte el mismo fichero que en
-`fsp-cumplimiento`.
+da 0 donde el auditor puso error, que **un tercero tokenizado apaga el criterio de tercero
+sin casar nada por casualidad** y el cruce sigue atando por importe, y que `lib_fsp.py` es byte
+a byte el mismo fichero que en `fsp-cumplimiento`.

@@ -29,9 +29,13 @@ reserva `TER h…` que también rehidrata. Con un `.cli` activo el diario **lo i
 `configurar(smn_file=…)`, y `consultar_diario` se lo pide con la frase «necesito la contrapartida…».
 El resumen de la exportación dice cuántos tokens salen por cuenta propia, por contrapartida y de
 reserva, y cuántos asientos casan en el diario; si ninguno casa, error: «ese diario no es el de esta
-población». Qué probar: que el modelo ponga el perfil, pida la ruta del diario al auditor cuando el
-fichero activo es un `.cli`, y que en el extracto no quede ningún nombre de tercero. **Los skills
-`fsp-*` todavía no usan esto** —el papel no rehidrata—: esta versión prueba solo la pieza del MCP.
+población». **Plugin 1.12.1 (15/09/2026): `fsp-mum` ya lo usa.** Pone el perfil al empezar, pide la ruta del
+diario al auditor cuando el fichero activo es un `.cli`, dice en una línea que las facturas se leen tal cual
+(el tachado es el ticket 5, pendiente), traslada el resumen de tokens, y al entregar desanonimiza el papel
+con `rehidratar(…, leyenda=true)`. `fsp-cumplimiento` todavía no. Qué probar: una MUM de punta a punta —que
+en el chat no aparezca ninguna razón social de la muestra, que el papel del expediente llegue con nombres
+reales y hoja «Tokens», y que el elemento con importe distinto salga como «sin documento» con su documento
+sobrante al lado (el cruce va sin tercero hasta que las facturas lleven el token estampado).
 
 **MCP 1.12.0 — confidencialidad, tickets 2 y 3 (plugin de pruebas 1.11.0, 10/09/2026).**
 `cancelacion-saldos`, `continuidad-saldos` y `cuadro-mando-diario` empiezan con
