@@ -330,6 +330,22 @@ def main() -> int:
            "con la ruta del documento, la celda del fichero enlaza y la ruta es ABSOLUTA")
         ok(_wb2.active.cell(row=10, column=_i["Fichero"]).hyperlink is None,
            "y un elemento sin documento no enlaza a ninguna parte")
+        # -- las rutas de Windows no pasan por resolve(): el vinculo salia /home/claude/C:\... (16/09/2026)
+        _tm = _P(_tf.mkdtemp())
+        (_tm / "facturas").mkdir()
+        (_tm / "facturas" / "manifiesto.json").write_text(_json.dumps({"carpeta": r"C:\Exp\Facturas", "origen": "mcp", "documentos": [
+            {"id": "f01", "fichero": "a.pdf", "ruta": r"C:\Exp\Facturas\a.pdf", "paginas": 1, "imagenes": ["f01_p1.jpg"]}]}), encoding="utf-8")
+        _rw = _gp.rutas_documentos(str(_tm / "manifiesto.json"), None)
+        ok(_rw.get("a.pdf") == r"C:\Exp\Facturas\a.pdf",
+           "una ruta de Windows del manifiesto se enlaza tal cual, sin /home/… delante, y el manifiesto se encuentra en facturas/")
+        _rc = _gp.rutas_documentos(None, r"C:\Otra Carpeta\Docs")
+        ok(_rc == {}, "sin manifiesto y con una carpeta de Windows que aqui no existe, no se inventa ningun vinculo")
+        _rc2 = _gp.rutas_documentos(str(_tm / "manifiesto.json"), r"C:\Otra Carpeta\Docs")
+        ok(_rc2.get("a.pdf") == r"C:\Otra Carpeta\Docs\a.pdf",
+           "--carpeta-documentos de Windows rehace el vinculo con su propio separador, sin mezclar barras")
+        from preparar_documentos import _leer_manifiesto as _lm
+        ok(_lm(_tm).get("_carpeta") == str(_tm / "facturas") and "imagenes" in _lm(_tm)["documentos"][0],
+           "preparar_documentos lee el manifiesto de la subcarpeta facturas/ y las imagenes se resuelven contra ella")
         # -- las fechas son fechas, y los dias una resta
         from datetime import date as _date, datetime as _dt
         _fl = _ws.cell(row=8, column=_i["Fecha"]).value

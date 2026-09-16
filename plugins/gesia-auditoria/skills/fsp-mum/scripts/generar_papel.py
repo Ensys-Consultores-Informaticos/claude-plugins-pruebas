@@ -73,6 +73,7 @@ papel se pueda regenerar identico dentro de dos años.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -156,6 +157,25 @@ def _anchos(ws, anchos: dict[int, float]) -> None:
         ws.column_dimensions[get_column_letter(col)].width = w
 
 
+_RE_RUTA_WINDOWS = re.compile(r"^[A-Za-z]:[\\/]|^\\\\")
+
+
+def _absoluta(ruta: str) -> str:
+    """Una ruta de Windows NO se toca desde el contenedor: Path.resolve() le ponia delante
+    /home/claude/ y el vinculo del papel salia roto (registro del 16/09/2026)."""
+    ruta = str(ruta)
+    if _RE_RUTA_WINDOWS.match(ruta):
+        return ruta
+    return str(Path(ruta).resolve())
+
+
+def _bajo(base: str, nombre: str) -> str:
+    """base/nombre respetando el separador de la base: una carpeta de Windows lleva '\\'."""
+    if _RE_RUTA_WINDOWS.match(base):
+        return base.rstrip("\\/") + "\\" + nombre
+    return _absoluta(str(Path(base) / nombre))
+
+
 def rutas_documentos(manifiesto: str | None, carpeta: str | None) -> dict[str, str]:
     """{nombre de fichero: ruta ABSOLUTA} para los hipervinculos del papel.
 
@@ -167,17 +187,21 @@ def rutas_documentos(manifiesto: str | None, carpeta: str | None) -> dict[str, s
     """
     rutas: dict[str, str] = {}
     if manifiesto:
-        man = cargar_json(manifiesto)
-        for d in man.get("documentos") or []:
-            nombre, ruta = d.get("fichero"), d.get("ruta")
-            if nombre and ruta:
-                rutas[nombre] = str(Path(ruta).resolve())
+        pm = Path(manifiesto)
+        if not pm.exists() and (pm.parent / "facturas" / "manifiesto.json").exists():
+            pm = pm.parent / "facturas" / "manifiesto.json"   # la carpeta de preparar_facturas, subida entera
+        if pm.exists():
+            man = cargar_json(str(pm))
+            for d in man.get("documentos") or []:
+                nombre, ruta = d.get("fichero"), d.get("ruta")
+                if nombre and ruta:
+                    rutas[nombre] = _absoluta(ruta)
     if carpeta:
         base = Path(carpeta)
         nombres = set(rutas) or set()
         if not nombres and base.is_dir():
             nombres = {p.name for p in base.iterdir() if p.is_file()}
-        rutas = {n: str((base / n).resolve()) for n in nombres}
+        rutas = {n: _bajo(str(carpeta), n) for n in nombres}
     return rutas
 
 

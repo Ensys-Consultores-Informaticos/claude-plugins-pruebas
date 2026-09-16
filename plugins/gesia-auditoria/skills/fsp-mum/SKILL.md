@@ -238,9 +238,12 @@ ficheros se han apartado como justificantes. Trasládale al auditor los recuento
 sin nombres, que no los hay.
 
 Deja en `destino` un JPEG por página a 100 ppp y un `manifiesto.json` que
-`preparar_documentos.py` lee tal cual: **sube esa carpeta** (en Cowork, `device_stage_files`
-sobre `_tmp_cowork\facturas`) y trabaja con la copia del sandbox como `$DATOS`. Los pasos
-siguientes —`--lotes`, `--fusionar`, `--estado`— son los mismos. **`--ampliar` no**: con
+`preparar_documentos.py` lee tal cual: **sube esa carpeta dentro del mismo `$DATOS` del paso 2**
+(en Cowork, `device_stage_files` sobre `_tmp_cowork\facturas`; queda como `$DATOS/facturas/`).
+**No es otro `$DATOS`**: `muestra.json`, `parametros.json` y `facturas/` conviven en el mismo
+directorio, y el script encuentra el manifiesto en esa subcarpeta solo (con scripts anteriores
+al 16/09/2026 había que copiarlo a la raíz a mano: ya no). Los pasos siguientes —`--lotes`,
+`--fusionar`, `--estado`— son los mismos. **`--ampliar` no**: con
 imágenes del MCP, la página que falte se pide otra vez al MCP con `documentos=["<fichero>"]`
 y `paginas=[-1]`, y se vuelve a subir.
 
@@ -365,6 +368,7 @@ python "$SKILL/scripts/ejecutar_mum.py" \
     --muestra "$DATOS/muestra.json" --parametros "$DATOS/parametros.json" \
     --facturas "$DATOS/facturas.json" --evaluacion "$DATOS/evaluacion.json" \
     --manifiesto "$DATOS/manifiesto.json" \
+    # (si las imágenes las hizo el MCP, el manifiesto está en $DATOS/facturas/: el script lo encuentra igual)
     --salida "$TRABAJO/$PAPEL" --generado "<AAAA-MM-DD, la fecha que te dé el usuario>"
 ```
 
@@ -437,8 +441,8 @@ cifrado, y es lo que permite rehidratar un papel de hace días.
 **Lo que no digas**: el error proyectado, el error neto, si se supera el error tolerable, o
 si la prueba pasa. Nada de eso sale de este papel.
 
-**Los temporales.** `parametros.json` lo escribiste tú desde la respuesta de `obtener_entidad`, así que `limpiar_exportaciones()` **no lo borra**: bórralo aparte, y en una carpeta conectada puede pedir permiso de borrado. `limpiar_exportaciones()` borra la muestra y la evaluación exportadas.
-`facturas.json` y el directorio de imágenes los escribiste tú: bórralos con el directorio de
+**Los temporales.** `parametros.json` lo escribiste tú desde la respuesta de `obtener_entidad`, así que `limpiar_exportaciones()` **no lo borra**: bórralo aparte, y en una carpeta conectada puede pedir permiso de borrado. `limpiar_exportaciones()` borra la muestra y la evaluación exportadas y, desde el MCP 1.14.3, **también las imágenes y el `manifiesto.json` que `preparar_facturas` dejó en `_tmp_cowork\facturas`** (con un MCP anterior quedan ahí: dilo al auditor con la ruta, que en Cowork no tienes shell en su equipo).
+`facturas.json` y las copias del sandbox los escribiste tú: bórralos con el directorio de
 trabajo. Los PDF no se copian a ningún sitio.
 
 ---

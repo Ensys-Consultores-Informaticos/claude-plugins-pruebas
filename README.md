@@ -29,6 +29,12 @@ transcribe el sello en `token` y el cruce lo usa en vez del nombre. Qué probar:
 «tachadas» de punta a punta —que las imágenes que suben no lleven el nombre del emisor, que el papel salga
 igual que en claro (la calibración era 42/42 y 18/18), y qué tarda (unos 4 s por factura en el equipo)—; y
 otra con «tal cual», que el token en la esquina no estorbe. `fsp-cumplimiento` todavía no pregunta.
+**1.13.3 (16/09/2026), del tercer registro del día (MUM con «tachadas», 6/6):** el vínculo del papel ya no sale
+`/home/claude/C:\…` (una ruta de Windows no pasa por `resolve()` en el contenedor); `preparar_documentos.py` encuentra
+el manifiesto en `$DATOS/facturas/`, la carpeta de `preparar_facturas` subida entera, sin copiar nada a mano; `$DATOS` es
+uno solo y el `SKILL.md` lo dice; `preparar_facturas` purga de `destino` las imágenes de otra sesión y apunta imágenes y
+manifiesto para `limpiar_exportaciones()`, que ahora los borra. Qué probar: la misma MUM, y comprobar que el vínculo del
+papel abre el PDF, que `--lotes` va a la primera y que `limpiar_exportaciones()` deja `_tmp_cowork\facturas` vacía.
 **1.13.2 (16/09/2026), de reproducir en local la MUM del segundo registro (24 elementos) con «tachadas»:** la contrapartida sale 24 de 24 (la
 muestra trae `Cuenta` como nombre y `CodigoCuenta` como código, y el 472 ya no cuenta como tercero: lo de «población
 ajustada» era un diagnóstico falso); el tachado ya no se come el número de factura (importes ingleses, fechas en letras e

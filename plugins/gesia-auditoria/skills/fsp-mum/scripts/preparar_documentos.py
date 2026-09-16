@@ -231,11 +231,30 @@ def inventariar(carpeta: Path, trabajo: Path) -> dict:
     return man
 
 
+def _carpeta_manifiesto(trabajo: Path) -> Path | None:
+    """Donde esta manifiesto.json: en el directorio de trabajo, o en la subcarpeta que deja
+    preparar_facturas cuando se sube entera (`facturas/`). En el registro del 16/09/2026 hubo
+    que copiarlo a mano un nivel arriba porque solo se miraba la raiz."""
+    if (trabajo / "manifiesto.json").exists():
+        return trabajo
+    if (trabajo / "facturas" / "manifiesto.json").exists():
+        return trabajo / "facturas"
+    cands = [p.parent for p in trabajo.glob("*/manifiesto.json")]
+    return cands[0] if len(cands) == 1 else None
+
+
 def _leer_manifiesto(trabajo: Path) -> dict:
-    f = trabajo / "manifiesto.json"
-    if not f.exists():
-        raise SystemExit("[C] No hay manifiesto: ejecuta primero con --carpeta")
-    return json.loads(f.read_text(encoding="utf-8"))
+    carpeta = _carpeta_manifiesto(trabajo)
+    if carpeta is None:
+        raise SystemExit("[C] No hay manifiesto: ejecuta primero con --carpeta, o sube la carpeta de "
+                         "preparar_facturas (imagenes + manifiesto.json) dentro de --trabajo")
+    man = json.loads((carpeta / "manifiesto.json").read_text(encoding="utf-8"))
+    man["_carpeta"] = str(carpeta)   # las imagenes relativas se resuelven contra esta
+    return man
+
+
+def _sin_privados(man: dict) -> dict:
+    return {k: v for k, v in man.items() if not str(k).startswith("_")}
 
 
 def _transcritos(trabajo: Path) -> set[str]:
@@ -266,6 +285,7 @@ def repartir_lotes(trabajo: Path, tamano: int) -> list[dict]:
     que se lanzo.
     """
     man = _leer_manifiesto(trabajo)
+    base = Path(man.get("_carpeta") or trabajo)
     hechos = _transcritos(trabajo)
     pend = [d for d in man["documentos"] if d["fichero"] not in hechos]
     lotes = []
@@ -273,7 +293,7 @@ def repartir_lotes(trabajo: Path, tamano: int) -> list[dict]:
         n = len(lotes) + 1
         lotes.append({"lote": n,
                       "salida": str(trabajo / f"facturas_lote_{n}.json"),
-                      "documentos": [{"fichero": d["fichero"], "imagenes": _imagenes_abs(trabajo, d["imagenes"]),
+                      "documentos": [{"fichero": d["fichero"], "imagenes": _imagenes_abs(base, d["imagenes"]),
                                       "paginas": d["paginas"]} for d in pend[i:i + tamano]]})
     (trabajo / "lotes.json").write_text(json.dumps(lotes, ensure_ascii=False, indent=1), encoding="utf-8")
     return lotes
@@ -401,8 +421,8 @@ def main() -> int:
             print(f"[C] {e}")
             return 2
         doc["imagenes"] = sorted(set(doc["imagenes"]) | {str(x) for x in imgs})
-        (trabajo / "manifiesto.json").write_text(
-            json.dumps(man, ensure_ascii=False, indent=1), encoding="utf-8")
+        (Path(man["_carpeta"]) / "manifiesto.json").write_text(
+            json.dumps(_sin_privados(man), ensure_ascii=False, indent=1), encoding="utf-8")
         print(f"Página {n} de {doc['fichero']}: {', '.join(str(x) for x in imgs)}")
 
     if a.lotes:
