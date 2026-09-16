@@ -29,6 +29,13 @@ transcribe el sello en `token` y el cruce lo usa en vez del nombre. Qué probar:
 «tachadas» de punta a punta —que las imágenes que suben no lleven el nombre del emisor, que el papel salga
 igual que en claro (la calibración era 42/42 y 18/18), y qué tarda (unos 4 s por factura en el equipo)—; y
 otra con «tal cual», que el token en la esquina no estorbe. `fsp-cumplimiento` todavía no pregunta.
+**1.13.2 (16/09/2026), de reproducir en local la MUM del segundo registro (24 elementos) con «tachadas»:** la contrapartida sale 24 de 24 (la
+muestra trae `Cuenta` como nombre y `CodigoCuenta` como código, y el 472 ya no cuenta como tercero: lo de «población
+ajustada» era un diagnóstico falso); el tachado ya no se come el número de factura (importes ingleses, fechas en letras e
+ISO son «dato»; la fila de rótulos se conserva en cadena y solo si toda es segura; el bloque de dirección no pisa la fila
+de la fecha) y tapa lo que quedaba en claro (IBAN extranjero, UTR y sort code, TBAI, LOPD a media página, y el emisor
+persona física bajo «Servicios prestados por:»). Qué probar: esa misma MUM con «tachadas» de punta a punta,
+y ver si el lector deja de avisar de números y fechas ilegibles.
 **1.13.1 (16/09/2026), del primer registro con el ticket 5:** `preparar_facturas` es incremental y se para a los
 45 s (`pendientes`, se vuelve a llamar; el timeout de 60 s de Cowork ya no es un fallo); una población MUM
 ajustada —los asientos están, los importes no— ya no se toma por «otro diario» y la contrapartida sale del

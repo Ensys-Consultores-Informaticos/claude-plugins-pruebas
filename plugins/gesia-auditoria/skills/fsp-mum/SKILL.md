@@ -170,10 +170,10 @@ tamaño de muestra deseado. Guárdalo tal cual, sin recortarlo.
 **Lee el resumen de la exportación de la muestra.** Trae dos líneas nuevas con el perfil:
 `muestra_tokenizada` —cuántos terceros llevan token por su cuenta, cuántos por la contrapartida
 del diario y cuántos de reserva— y `diario_comprobado` —cuántos asientos de la muestra están en
-el diario y casan en importe—. Trasládalas al auditor en una línea. **Una población de MUM suele
-venir ajustada** —exclusiones, periodificaciones, importes verificados—, así que es normal que
-los asientos estén en el diario y los importes no coincidan: el MCP lo dice como `POBLACIÓN
-AJUSTADA`, toma la contrapartida del asiento igual, y **no hay que buscar otro diario**. Solo si
+el diario y casan en importe—. Trasládalas al auditor en una línea. Si los asientos están en el
+diario pero los importes no coinciden —una población ajustada por exclusiones o periodificaciones—,
+el MCP lo dice como `POBLACIÓN AJUSTADA`, toma la contrapartida del asiento igual, y **no hay que
+buscar otro diario**; en la MUM del segundo registro la contrapartida salió 24 de 24. Solo si
 viene el error **«ese diario no es el de esta población»** —los asientos no existen en él— la ruta
 es otra: pídesela **una vez** al auditor, y **no busques otro `.smn` por tu cuenta** aunque haya
 varios en la carpeta; si tampoco, sigue sin diario. Si dice `SIN DIARIO`, es lo del paso 1:
