@@ -29,6 +29,13 @@ transcribe el sello en `token` y el cruce lo usa en vez del nombre. Qué probar:
 «tachadas» de punta a punta —que las imágenes que suben no lleven el nombre del emisor, que el papel salga
 igual que en claro (la calibración era 42/42 y 18/18), y qué tarda (unos 4 s por factura en el equipo)—; y
 otra con «tal cual», que el token en la esquina no estorbe. `fsp-cumplimiento` todavía no pregunta.
+**1.13.4 (16/09/2026), del cuarto registro del día (la MUM de 24 con «tachadas»):** el sello del emisor era el mismo en 9
+de 24 documentos porque dos palabras del nombre de esa cuenta —la ciudad del cliente— están en casi todas las facturas.
+`preparar_facturas` va ahora en dos fases (`fase` en la respuesta: `lectura` y `tachado`): lee el lote entero, descuenta las
+palabras comunes del lote, exige una palabra larga acertada y solo estampa con margen sobre el segundo candidato. Medido con el
+token correcto de cada documento: de 9 aciertos y 9 fallos a 17 aciertos y 0 fallos (2 ambiguos, 5 sin, que cruzan por importe,
+número y fecha). Una llamada puede acabar en `lectura` con `imagenes: 0`: se vuelve a llamar igual. Qué probar: la misma MUM,
+y que ningún sello vaya a un proveedor equivocado.
 **1.13.3 (16/09/2026), del tercer registro del día (MUM con «tachadas», 6/6):** el vínculo del papel ya no sale
 `/home/claude/C:\…` (una ruta de Windows no pasa por `resolve()` en el contenedor); `preparar_documentos.py` encuentra
 el manifiesto en `$DATOS/facturas/`, la carpeta de `preparar_facturas` subida entera, sin copiar nada a mano; `$DATOS` es

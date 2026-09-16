@@ -21,6 +21,8 @@ description: >
   arrancado, el expediente con cliente de muestreo vinculado (o el .cli
   directamente), y la carpeta con los documentos escaneados.
 ---
+_Versión del skill: 16/09/2026 · plugin interno 1.40.0 · pide MCP ≥ 1.14.4._
+
 
 # Prueba MUM de ForSampling (fsp-mum)
 
@@ -228,12 +230,15 @@ preparar_facturas(carpeta = "<la carpeta>",
 
 `terceros` son los candidatos a emisor: pásalos siempre —salen de `muestra.json`—, porque sin
 ellos el casado va contra el diccionario entero y es menos fiable. **La llamada es incremental y
-se para sola a los 45 segundos** —unos 4 por documento—: si la respuesta trae `pendientes > 0`,
-**vuelve a llamar con los mismos parámetros** hasta que sea 0; lo hecho no se rehace. Y si
+se para sola a los 45 segundos** —unos 2 a 4 por documento—: si la respuesta trae `pendientes > 0`,
+**vuelve a llamar con los mismos parámetros** hasta que sea 0; lo hecho no se rehace. Va en dos fases
+(`fase` en la respuesta): primero **lee** todo el lote y luego **tacha**; una llamada puede acabar en
+`lectura` con `imagenes: 0` y no es un fallo, es que hace falta el lote entero para casar bien al emisor. Y si
 Cowork corta la llamada («did not respond within 60s»), no es un fallo: el MCP siguió trabajando
 en el equipo, llama otra vez y verás lo hecho como `ya_hechos`. Con más de diez facturas, avisa al
 auditor de que va a tardar. La respuesta trae recuentos: cuántos documentos, cuántos con token
-estampado, cuántos sin casar (esos irán por importe, número y fecha), qué se ha tapado y cuántos
+estampado, cuántos ambiguos y sin casar (esos irán por importe, número y fecha: un sello equivocado
+es peor que ninguno, y el MCP prefiere no estampar cuando duda), qué se ha tapado y cuántos
 ficheros se han apartado como justificantes. Trasládale al auditor los recuentos en una línea,
 sin nombres, que no los hay.
 
