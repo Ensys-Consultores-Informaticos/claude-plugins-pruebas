@@ -170,10 +170,14 @@ tamaño de muestra deseado. Guárdalo tal cual, sin recortarlo.
 **Lee el resumen de la exportación de la muestra.** Trae dos líneas nuevas con el perfil:
 `muestra_tokenizada` —cuántos terceros llevan token por su cuenta, cuántos por la contrapartida
 del diario y cuántos de reserva— y `diario_comprobado` —cuántos asientos de la muestra están en
-el diario y casan en importe—. Trasládalas al auditor en una línea. Si en vez de resumen viene
-el error **«ese diario no es el de esta población»**, la ruta que te dieron no es la del diario
-del que salió la población: pídesela otra vez, y **no busques otro `.smn` por tu cuenta** aunque
-haya varios en la carpeta. Si dice `SIN DIARIO`, es lo del paso 1: tokens de reserva y adelante.
+el diario y casan en importe—. Trasládalas al auditor en una línea. **Una población de MUM suele
+venir ajustada** —exclusiones, periodificaciones, importes verificados—, así que es normal que
+los asientos estén en el diario y los importes no coincidan: el MCP lo dice como `POBLACIÓN
+AJUSTADA`, toma la contrapartida del asiento igual, y **no hay que buscar otro diario**. Solo si
+viene el error **«ese diario no es el de esta población»** —los asientos no existen en él— la ruta
+es otra: pídesela **una vez** al auditor, y **no busques otro `.smn` por tu cuenta** aunque haya
+varios en la carpeta; si tampoco, sigue sin diario. Si dice `SIN DIARIO`, es lo del paso 1:
+tokens de reserva y adelante.
 
 **Dónde es `<DATOS>` no depende del producto, depende de una propiedad**: si los scripts y
 el MCP comparten disco. Compruébalo por la ruta que te devuelve `configurar`, no por dónde
@@ -223,11 +227,15 @@ preparar_facturas(carpeta = "<la carpeta>",
 ```
 
 `terceros` son los candidatos a emisor: pásalos siempre —salen de `muestra.json`—, porque sin
-ellos el casado va contra el diccionario entero y es menos fiable. La respuesta trae recuentos:
-cuántos documentos, cuántos con token estampado, cuántos sin casar (esos irán por importe,
-número y fecha), qué se ha tapado y cuántos ficheros se han apartado como justificantes. Tarda
-unos 4 segundos por documento: dilo si son muchos. Trasládale al auditor los recuentos en una
-línea, sin nombres, que no los hay.
+ellos el casado va contra el diccionario entero y es menos fiable. **La llamada es incremental y
+se para sola a los 45 segundos** —unos 4 por documento—: si la respuesta trae `pendientes > 0`,
+**vuelve a llamar con los mismos parámetros** hasta que sea 0; lo hecho no se rehace. Y si
+Cowork corta la llamada («did not respond within 60s»), no es un fallo: el MCP siguió trabajando
+en el equipo, llama otra vez y verás lo hecho como `ya_hechos`. Con más de diez facturas, avisa al
+auditor de que va a tardar. La respuesta trae recuentos: cuántos documentos, cuántos con token
+estampado, cuántos sin casar (esos irán por importe, número y fecha), qué se ha tapado y cuántos
+ficheros se han apartado como justificantes. Trasládale al auditor los recuentos en una línea,
+sin nombres, que no los hay.
 
 Deja en `destino` un JPEG por página a 100 ppp y un `manifiesto.json` que
 `preparar_documentos.py` lee tal cual: **sube esa carpeta** (en Cowork, `device_stage_files`
@@ -376,7 +384,10 @@ la prueba no es MUM, la evaluación tiene forma de prueba de cumplimiento— y *
 escrito nada**.
 
 Salida `1` → el papel **sí está escrito**, pero hay avisos. **Léelos y cuéntalos al
-entregar.**
+entregar.** El script imprime una sección **«PARA CONTAR AL ENTREGAR (tal cual, sin resumir)»**:
+esas líneas —A02, A07, A08, A09…— van al auditor **literales, todas**, no un resumen con tus
+cifras. En la prueba en frío del 16/09 se trasladaron dos de cuatro y las otras dos (documentos
+sin base imponible legible, documentos sin fecha legible) se perdieron por el camino.
 
 Imprime, además, el término con el que compara esta población, los elementos con diferencia
 y, si había evaluación, el recuento frente al auditor. **Lee esa salida antes de entregar.**
@@ -476,7 +487,9 @@ unidad de muestreo, tamaño de la población, error tolerable y fecha de generac
 | Fichero activo `.cli` y el auditor no sabe dónde está el diario | sigue: la muestra sale con tokens de reserva `TER h…`, el cruce va sin tercero, y el papel lo dice |
 | Una factura tachada sin token (el emisor no casó con ningún tercero: logo sin texto, nombre distinto al del diario) | sigue: ese documento se cruza por importe, número y fecha, y si queda «sin documento» se ata con `poblacion_id` |
 | El MCP no tiene `preparar_facturas` (anterior a la 1.14.0) | sigue en claro con `preparar_documentos.py --carpeta`, y se dice que las facturas no van tachadas |
-| El `.smn` indicado no es el de la población | **para** en el paso 2 con «ese diario no es el de esta población»: se pide otra vez, no se busca otro |
+| El `.smn` indicado no es el de la población (sus asientos no existen en él) | **para** en el paso 2 con «ese diario no es el de esta población»: se pide una vez, no se busca otro |
+| Población ajustada: los asientos existen pero los importes no coinciden con el diario | sigue: el MCP toma la contrapartida del asiento y lo dice como `POBLACIÓN AJUSTADA`; no es otro diario |
+| `preparar_facturas` devuelve `pendientes > 0`, o Cowork corta la llamada a los 60 s | sigue: se vuelve a llamar con los mismos parámetros; lo hecho no se rehace |
 | `rehidratar` devuelve `tokens_sin_nombre` | sigue: el papel se entrega con esos tokens tal cual y se dicen al auditor; no se completan a mano |
 | Fichero de salida abierto en Excel | **para** al guardar, y dice que hay que cerrarlo |
 

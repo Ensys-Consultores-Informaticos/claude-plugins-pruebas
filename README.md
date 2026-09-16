@@ -29,6 +29,10 @@ transcribe el sello en `token` y el cruce lo usa en vez del nombre. Qué probar:
 «tachadas» de punta a punta —que las imágenes que suben no lleven el nombre del emisor, que el papel salga
 igual que en claro (la calibración era 42/42 y 18/18), y qué tarda (unos 4 s por factura en el equipo)—; y
 otra con «tal cual», que el token en la esquina no estorbe. `fsp-cumplimiento` todavía no pregunta.
+**1.13.1 (16/09/2026), del primer registro con el ticket 5:** `preparar_facturas` es incremental y se para a los
+45 s (`pendientes`, se vuelve a llamar; el timeout de 60 s de Cowork ya no es un fallo); una población MUM
+ajustada —los asientos están, los importes no— ya no se toma por «otro diario» y la contrapartida sale del
+asiento; y la sección «PARA CONTAR AL ENTREGAR» va literal al auditor.
 
 **MCP 1.13.0 — la muestra de ForSampling tokenizada por la contrapartida (plugin de pruebas 1.12.0, 15/09/2026).**
 `fsp-mum` y `fsp-cumplimiento` tienen perfil: con `configurar(perfil=…)`, la muestra que exporta
