@@ -21,7 +21,7 @@ description: >
   arrancado, el expediente con cliente de muestreo vinculado (o el .cli
   directamente), y la carpeta con los documentos escaneados.
 ---
-_Versión del skill: 16/09/2026 · plugin interno 1.40.0 · pide MCP ≥ 1.14.4._
+_Versión del skill: 16/09/2026 · plugin interno 1.41.0 · pide MCP ≥ 1.14.5._
 
 
 # Prueba MUM de ForSampling (fsp-mum)
@@ -233,7 +233,10 @@ ellos el casado va contra el diccionario entero y es menos fiable. **La llamada 
 se para sola a los 45 segundos** —unos 2 a 4 por documento—: si la respuesta trae `pendientes > 0`,
 **vuelve a llamar con los mismos parámetros** hasta que sea 0; lo hecho no se rehace. Va en dos fases
 (`fase` en la respuesta): primero **lee** todo el lote y luego **tacha**; una llamada puede acabar en
-`lectura` con `imagenes: 0` y no es un fallo, es que hace falta el lote entero para casar bien al emisor. Y si
+`lectura` con `imagenes: 0` y no es un fallo, es que hace falta el lote entero para casar bien al emisor.
+Si una factura no lleva el total en la primera página —las que paginan con «Suma y sigue»—, el MCP
+**añade su última página él solo** y lo cuenta en `ultimas_paginas`: por eso a veces salen más
+imágenes que documentos, y por eso `--ampliar` hace falta menos que antes. Y si
 Cowork corta la llamada («did not respond within 60s»), no es un fallo: el MCP siguió trabajando
 en el equipo, llama otra vez y verás lo hecho como `ya_hechos`. Con más de diez facturas, avisa al
 auditor de que va a tardar. La respuesta trae recuentos: cuántos documentos, cuántos con token
@@ -284,7 +287,10 @@ la misma tanda**, hasta cuatro a la vez; a cada uno le pasas en el prompt **el n
 auditada** (el de `contexto_expediente`), la lista de sus documentos con las imágenes y la
 ruta de salida, y nada más: ni la muestra, ni los importes de libros. El nombre de la entidad
 va para que el lector sepa qué lado del documento NO es el tercero: en una prueba de ventas
-las facturas las emite la propia entidad y el tercero es el destinatario. Cada lector devuelve una línea de resumen; si uno devuelve el JSON entero en vez
+las facturas las emite la propia entidad y el tercero es el destinatario. Al lanzarlos, recuérdales que **el fichero del lote es JSON y nada más**: empieza en `{` y
+acaba en `}`, sin vallas de código ni etiquetas detrás. Si aun así llega con texto alrededor,
+`--fusionar` lo recorta y lo dice en una línea (`rescatados`), pero no siempre se puede.
+Cada lector devuelve una línea de resumen; si uno devuelve el JSON entero en vez
 de escribir el fichero, escríbelo tú en su ruta. Si uno falla, **un reintento** con el mismo
 lote; si vuelve a fallar, lee tú ese lote en línea. Después:
 

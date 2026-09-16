@@ -264,14 +264,28 @@ def main() -> int:
     (_t / "facturas_lote_2.json").write_text(_json.dumps({"facturas": [{"fichero": "c.pdf", "total": "3,00"},
                                                                        {"fichero": "z.pdf", "total": "9,00"}]}), encoding="utf-8")
     (_t / "facturas_lote_3.json").write_text("{esto no es json", encoding="utf-8")
+    # un lector devolvio el fichero con una etiqueta de cierre pegada detras del JSON y se
+    # perdio el lote entero, 10 documentos (registro del 16/09/2026): ahora se recorta
+    (_t / "facturas_lote_4.json").write_text(
+        '{"facturas": [{"fichero": "d.pdf", "total": "4,00"}]}\n</content>', encoding="utf-8")
     _r = fusionar(_t)
     _f = _json.loads((_t / "facturas.json").read_text(encoding="utf-8"))["facturas"]
-    ok([x["fichero"] for x in _f] == ["a.pdf", "b.pdf", "c.pdf", "z.pdf"],
+    ok([x["fichero"] for x in _f] == ["a.pdf", "b.pdf", "c.pdf", "z.pdf", "d.pdf"],
        "la fusion conserva lo que ya habia, anade los lotes en el orden del manifiesto y deja al final lo desconocido")
-    ok(_r["faltan"] == [] and _r["sobran"] == ["z.pdf"],
+    ok(_r["faltan"] == [] and _r["sobran"] == ["z.pdf", "d.pdf"],
        "y dice que sobra z.pdf, que ningun documento del inventario respalda")
     ok("poblacion_id" not in _f[1], "un lector no puede atar documentos a elementos: la fusion le quita poblacion_id")
-    ok(_r["parciales"] == 3 and _r["entradas"] == 3, "un lote con JSON invalido se ignora avisando, sin tumbar la fusion")
+    ok(_r["parciales"] == 4 and _r["entradas"] == 4, "un lote con JSON invalido se ignora avisando, sin tumbar la fusion")
+    from preparar_documentos import _json_de_lote
+    ok(_r["rescatados"] == ["facturas_lote_4.json"] and any(x["fichero"] == "d.pdf" for x in _f),
+       "un lote con una etiqueta de cierre pegada al JSON se recorta y se lee, y la fusion dice cual")
+    ok(all(len((_json_de_lote(_c) or {}).get("facturas", [])) == 1 for _c in (
+            '{"facturas": [{"fichero": "a.pdf"}]}\n</content>',
+            '```json\n{"facturas": [{"fichero": "a.pdf"}]}\n```',
+            'Aqui tienes:\n{"facturas": [{"fichero": "a.pdf"}]}\nListo.',
+            '[{"fichero": "a.pdf"}]'))
+       and _json_de_lote('{"facturas": [{"fichero": "a.p') is None,
+       "el recorte salva valla de codigo, prosa alrededor y lista pelada, pero NO se inventa nada con un fichero truncado")
 
     # -- el papel: cuatro zonas de color, el campo principal repetido y el error como
     # formula. Se comprueba la HOJA, no solo los numeros: el layout es lo que el auditor

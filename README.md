@@ -29,6 +29,13 @@ transcribe el sello en `token` y el cruce lo usa en vez del nombre. Qué probar:
 «tachadas» de punta a punta —que las imágenes que suben no lleven el nombre del emisor, que el papel salga
 igual que en claro (la calibración era 42/42 y 18/18), y qué tarda (unos 4 s por factura en el equipo)—; y
 otra con «tal cual», que el token en la esquina no estorbe. `fsp-cumplimiento` todavía no pregunta.
+**1.13.5 (16/09/2026), de la calibración (la MUM de ventas de 42 elementos con «tachadas»):** pasó —los 42 terceros
+tokenizados por contrapartida, las 44 imágenes tachadas, la rehidratación sin ningún token sin nombre, y el único
+elemento sin atar es la diferencia real, que tampoco ata en claro—. Dos arreglos de ahí: una factura que no lleva el
+total en la primera página («Suma y sigue») **se lleva también su última página sola**, sin esperar al aviso ni a otra
+ronda (`ultimas_paginas` en la respuesta, y por eso salen más imágenes que documentos); y `--fusionar` **recorta el JSON
+de un lote que venga con adornos** —un lector devolvió el fichero con una etiqueta de cierre detrás y se perdió el lote
+entero, 10 documentos—, lo dice en `rescatados` y no se inventa nada si está truncado de verdad.
 **1.13.4 (16/09/2026), del cuarto registro del día (la MUM de 24 con «tachadas»):** el sello del emisor era el mismo en 9
 de 24 documentos porque dos palabras del nombre de esa cuenta —la ciudad del cliente— están en casi todas las facturas.
 `preparar_facturas` va ahora en dos fases (`fase` en la respuesta: `lectura` y `tachado`): lee el lote entero, descuenta las

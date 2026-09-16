@@ -93,6 +93,10 @@ Escribe el JSON en la ruta que te han dado, con esta forma exacta:
 {"facturas": [ ...una entrada por fichero del lote, en el mismo orden... ]}
 ```
 
+**El fichero es JSON y nada más.** El primer carácter es `{` y el último es `}`: ni vallas de
+código, ni comentarios, ni una etiqueta de cierre detrás. Un lote se perdió entero —diez
+documentos— porque el fichero terminaba en `]}` seguido de una etiqueta de cierre de bloque.
+
 Y responde **solo** con una línea de resumen: cuántos documentos has transcrito, cuántos
 llevan el total vacío y cuántos el número vacío, y la ruta del fichero. Ningún importe, ningún
 nombre de proveedor en la respuesta: todo eso va en el fichero, no en el contexto de quien te

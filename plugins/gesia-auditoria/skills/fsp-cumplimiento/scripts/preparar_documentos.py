@@ -299,6 +299,43 @@ def repartir_lotes(trabajo: Path, tamano: int) -> list[dict]:
     return lotes
 
 
+def _json_de_lote(texto: str):
+    """El JSON de un lote, aunque venga con adornos alrededor. Un lector devolvio el fichero
+    terminado en `]}\n</content>` y se perdio el lote entero -10 documentos- por un cierre de
+    etiqueta (registro del 16/09/2026). Se prueba tal cual; si no, desde la primera llave hasta
+    el ultimo cierre que parsee. Devuelve None si no hay JSON dentro."""
+    t = (texto or "").strip()
+    for intento in (t, t.strip("`"), _entre_llaves(t)):
+        if not intento:
+            continue
+        try:
+            d = json.loads(intento)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if isinstance(d, dict):
+            return d
+        if isinstance(d, list):
+            return {"facturas": d}
+    return None
+
+
+def _entre_llaves(t: str):
+    """Desde la primera llave hasta el ultimo cierre que parsee, recortando por el final."""
+    i = t.find("{")
+    if i < 0:
+        return None
+    cola = t[i:]
+    for j in range(len(cola), 0, -1):
+        if cola[j - 1] not in "}]":
+            continue
+        try:
+            json.loads(cola[:j])
+            return cola[:j]
+        except json.JSONDecodeError:
+            continue
+    return None
+
+
 def fusionar(trabajo: Path) -> dict:
     """Junta los facturas_lote_*.json en facturas.json y dice que falta y que sobra.
 
@@ -320,13 +357,18 @@ def fusionar(trabajo: Path) -> dict:
         except json.JSONDecodeError:
             pass
     parciales = sorted(trabajo.glob("facturas_lote_*.json"))
-    leidas = 0
+    leidas, rescatados = 0, []
     for p in parciales:
+        crudo = p.read_text(encoding="utf-8")
         try:
-            datos = json.loads(p.read_text(encoding="utf-8"))
+            datos = json.loads(crudo)
         except json.JSONDecodeError:
-            print(f"[A] {p.name}: no es JSON válido, se ignora")
-            continue
+            datos = _json_de_lote(crudo)
+            if datos is None:
+                print(f"[A] {p.name}: no es JSON válido ni recortando, se ignora")
+                continue
+            rescatados.append(p.name)
+            print(f"[A] {p.name}: traía texto de más alrededor del JSON; se ha recortado y leído")
         for x in datos.get("facturas", []):
             if x.get("fichero"):
                 # el agente no ata documentos a elementos: eso es del auditor
@@ -340,7 +382,7 @@ def fusionar(trabajo: Path) -> dict:
     f_out.write_text(json.dumps({"facturas": facturas}, ensure_ascii=False, indent=1), encoding="utf-8")
     faltan = [f for f in orden if f not in por_fichero]
     return {"parciales": len(parciales), "entradas": leidas, "total": len(facturas),
-            "faltan": faltan, "sobran": sobran}
+            "faltan": faltan, "sobran": sobran, "rescatados": rescatados}
 
 
 def main() -> int:
