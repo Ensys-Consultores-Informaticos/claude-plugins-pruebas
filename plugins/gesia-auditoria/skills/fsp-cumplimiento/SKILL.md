@@ -188,11 +188,15 @@ dónde creas que estás corriendo.
 # Comparten disco (los scripts ven las rutas de Windows del MCP): directo.
 DATOS="$TRABAJO"
 
-# No lo comparten (los scripts corren en un contenedor): exportar DENTRO de una carpeta
-# conectada -una ruta del sandbox o del $TEMP de Windows no sirve-, subirla, y leer la
-# copia del sandbox.
+# No lo comparten (los scripts corren en un contenedor): $DATOS es un directorio ESCRIBIBLE
+# del contenedor, y ahi se copia lo que se sube. `/mnt/user-data/uploads` NO vale como
+# $DATOS: es de solo lectura, y el skill escribe ahi facturas.json (y roles.json).
+# Ademas, el staging cuelga los ficheros de una subcarpeta con el NOMBRE de la carpeta
+# conectada, asi que la ruta subida NO es la que uno anticipa:
+#   /mnt/user-data/uploads/<carpeta conectada>/_tmp_cowork/muestra.json
+# Receta: exportar a _tmp_cowork en la carpeta conectada, subirla, y copiar de ahi a $DATOS.
 #   exportar_consulta(..., ruta = "<raíz conectada>/_tmp_cowork/muestra.json")
-DATOS="/mnt/user-data/uploads/_tmp_cowork"
+DATOS="$HOME/trabajo"; mkdir -p "$DATOS"   # y se copia ahi lo subido
 ```
 **El escenario habitual en Cowork**, para no volver a razonarlo cada sesión: el MCP corre en
 el equipo del usuario y los scripts en el contenedor de la nube, así que **no comparten
@@ -244,13 +248,20 @@ equipo del auditor, y a la nube solo suben esas imágenes, nunca los PDF:
 preparar_facturas(carpeta = "<la carpeta>",
                   destino = "<raíz de la carpeta conectada>\\_tmp_cowork\\facturas",
                   modo = "tachadas" | "claras",
-                  terceros = [<los tokens de tercero de la muestra exportada, sin repetir>])
+                  terceros = [<los tokens de tercero de la muestra exportada, sin repetir>],
+                  numeros = [<los números de documento de la muestra, sin repetir>])
 ```
 
 `terceros` son los candidatos a emisor: pásalos siempre —salen de `muestra.json`—, porque sin
-ellos el casado va contra el diccionario entero y es menos fiable. **La llamada es incremental y
+ellos el casado va contra el diccionario entero y es menos fiable. **`numeros` son los números de
+documento de esa misma muestra** (la columna de documento): con ellos, el tachado **conserva ese
+número dondequiera que esté** en la factura, en vez de intentar adivinar qué parece un número. No
+expone nada —el auditor ya los tiene en libros— y es lo que evita que el número se vaya en negro
+cuando comparte sitio con un identificador. Si la población no trae número, no pases nada. **La llamada es incremental y
 se para sola a los 45 segundos** —unos 2 a 4 por documento—: si la respuesta trae `pendientes > 0`,
-**vuelve a llamar con los mismos parámetros** hasta que sea 0; lo hecho no se rehace. Va en dos
+**vuelve a llamar con los mismos parámetros** hasta que sea 0; lo hecho no se rehace. La regla de
+dedo para avisar al auditor con una cifra: **unos 8 a 10 documentos por llamada**, así que 24
+documentos son tres llamadas y unos dos minutos. Va en dos
 fases (`fase` en la respuesta): primero **lee** todo el lote y luego **tacha**; una llamada puede
 acabar en `lectura` con `imagenes: 0` y no es un fallo, es que hace falta el lote entero para
 casar bien al emisor. Si una factura no lleva el total en la primera página —las que paginan con
@@ -261,6 +272,9 @@ al auditor de que va a tardar. Trasládale los recuentos en una línea —docume
 estampado, ambiguos y sin casar, qué se ha tapado, justificantes apartados—, sin nombres, que no
 los hay. Los que quedan sin sello se cruzan por importe, número y fecha: un sello equivocado es
 peor que ninguno, y el MCP prefiere no estampar cuando duda.
+
+La respuesta trae **`ficheros`**, la lista de las imágenes generadas: úsala para subirlas, sin
+listar la carpeta ni escribir las rutas a mano.
 
 Deja en `destino` un JPEG por página a 100 ppp y un `manifiesto.json` que
 `preparar_documentos.py` lee tal cual: **sube esa carpeta dentro del mismo `$DATOS` del paso 2**
@@ -535,6 +549,7 @@ porque el papel ya no lo lleva escrito.
 | Un justificante mal clasificado como factura, o al revés | sigue: el que sobra se imprime como «documento que no es de ningún elemento»; el que falta, dilo y amplía la lista a mano |
 | Una columna de tercero que vale lo mismo en todas las filas | el skill cambia de columna solo, y lo avisa (A00) |
 | Dos documentos del mismo tercero encajan igual en un elemento | sigue: gana el de fecha más cercana; si empatan, el atributo de documento lo dice y pide confirmación |
+| Los documentos sobrantes son justo los ficheros de la carpeta SIN prefijo numérico | sigue: la carpeta tiene más documentos de los que pide la muestra. No es extravío ni diferencia |
 | Un elemento sin documento y un documento sobrante del mismo tercero | sigue, y el script lo señala como POSIBLE DIFERENCIA: se ata con `poblacion_id` |
 | Fichero activo `.cli` y el auditor no sabe dónde está el diario | sigue: la muestra sale con tokens de reserva `TER h…`, el cruce va sin tercero, y el papel lo dice |
 | El `.smn` indicado no es el de la población (sus asientos no existen en él) | **para** en el paso 2 con «ese diario no es el de esta población»: se pide una vez, no se busca otro |

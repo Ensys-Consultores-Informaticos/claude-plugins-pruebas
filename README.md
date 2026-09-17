@@ -29,6 +29,27 @@ transcribe el sello en `token` y el cruce lo usa en vez del nombre. Qué probar:
 «tachadas» de punta a punta —que las imágenes que suben no lleven el nombre del emisor, que el papel salga
 igual que en claro (la calibración era 42/42 y 18/18), y qué tarda (unos 4 s por factura en el equipo)—; y
 otra con «tal cual», que el token en la esquina no estorbe. `fsp-cumplimiento` todavía no pregunta.
+**1.13.8 (17/09/2026): el número de factura ya no se va en negro.** Dos piezas. La primera, decidida sobre la
+medida anterior: el skill le pasa al MCP **los números de documento que la muestra ya trae**, y el tachado los
+conserva **por igualdad**, dondequiera que estén, en vez de intentar adivinar qué parece un número. No expone
+nada —el auditor los tiene en libros— y lo que el barrido marca como identificador sigue en negro aunque lleve
+el número dentro. La segunda salió al medir la primera, y era la causa de fondo: **la banda de cabecera cobraba
+el margen de holgura pensado para un renglón torcido**, y como el borde de abajo de la banda es justo el primer
+renglón con dato, se comía el número y la fecha en todas las páginas. Medido sobre la misma carpeta de 24
+documentos: de 15 números, antes se leían 8 tachados; ahora **13, los mismos 13 que el OCR lee en la imagen sin
+tachar**. El único que se queda tiene tres caracteres y no se conserva a propósito. Además, `preparar_facturas`
+devuelve la **lista de imágenes generadas**, así que el skill ya no tiene que listar la carpeta y escribir a mano
+una lista larga de rutas para subirlas (31 en el registro), y el skill avisa de que van **de 8 a 10 documentos
+por llamada**. Qué probar: un cumplimiento o una MUM con «tachadas», mirando que el número de factura se lea en
+las imágenes que suben.
+**1.13.7 (17/09/2026), del registro de cumplimiento: qué se lleva el tachado.** Medido sobre la misma carpeta de 24
+documentos: el tachado **no tapa ninguna fecha ni ningún importe**, así que el aviso de fechas ilegibles era del
+escaneo. El número de factura sí: cuando comparte fila con el IBAN, la banda de cabecera se los llevaba a los dos.
+Ahora **la banda se perfora**: el rótulo y su número quedan a la vista y el IBAN sigue en negro. Medido de punta a
+punta —se tacha, se vuelve a pasar el OCR y se busca el número— el tachado todavía se lleva 5 de 15, con tres casos
+diagnosticados que piden otra solución. Y en el papel de los dos skills, la columna «Proveedor o cliente» enseña
+ahora el **token** cuando la factura va tachada, que es lo que el documento lleva impreso: `rehidratar` lo convierte
+en el nombre real al entregar. Antes salía vacía.
 **1.13.6 (17/09/2026): `fsp-cumplimiento` se pone al día con `fsp-mum`.** Dos cosas. El **papel** adopta el
 formato de la MUM: cuatro zonas de color con su banda de título, la celda del fichero enlazada al documento,
 las fechas como fecha de verdad, los días como resta de celdas, y CIF, tercero y concepto del documento, que

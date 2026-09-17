@@ -122,6 +122,10 @@ ZONAS_DEF = {
     "cruce": ("D · Evidencia del cruce", "7F7F7F", "F2F2F2"),
 }
 
+# «Proveedor o cliente» lleva lo que el documento diga: la razon social si la factura va en
+# claro, y el TOKEN del sello si va tachada -que `rehidratar` convierte en el nombre real al
+# entregar-. El CIF, con la factura tachada, se queda vacio: esta en negro y no se restaura,
+# porque el diccionario indexa por cuenta y no por CIF.
 COL_DOCUMENTO = ["Fichero", "Nº factura", "Fecha doc.", "CIF", "Proveedor o cliente", "Concepto",
                  "Base", "IVA", "IRPF", "Total"]
 COL_CRUCE = ["Casa por", "Días libros–doc."]
@@ -264,7 +268,7 @@ def _hoja(wb: Workbook, evaluados: list[dict], cols: dict, params: dict, generad
             fecha_doc = parse_fecha(fac.get("fecha"))
             valores += [fac.get("fichero"), fac.get("numero"),
                         fecha_doc or fac.get("fecha"), fac.get("cif"),
-                        fac.get("proveedor"), fac.get("concepto"),
+                        fac.get("proveedor") or fac.get("token"), fac.get("concepto"),
                         parse_importe(fac.get("base")), parse_importe(fac.get("iva")),
                         parse_importe(fac.get("irpf")), parse_importe(fac.get("total"))]
         else:
