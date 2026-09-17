@@ -80,6 +80,9 @@ def main() -> int:
     p.add_argument("--facturas", required=True)
     p.add_argument("--roles")
     p.add_argument("--evaluacion")
+    p.add_argument("--manifiesto", help="manifiesto.json: de ahí sale la ruta de cada documento para el hipervínculo")
+    p.add_argument("--carpeta-documentos", dest="carpeta_documentos",
+                   help="carpeta de los escaneos en la máquina del auditor; manda sobre el manifiesto")
     p.add_argument("--salida", required=True)
     p.add_argument("--generado", required=True)
     args = p.parse_args()
@@ -98,6 +101,10 @@ def main() -> int:
     argv = ["generar_papel.py"] + comunes + ["--salida", args.salida, "--generado", args.generado]
     if args.evaluacion:
         argv += ["--evaluacion", args.evaluacion]
+    if args.manifiesto:
+        argv += ["--manifiesto", args.manifiesto]
+    if args.carpeta_documentos:
+        argv += ["--carpeta-documentos", args.carpeta_documentos]
     sys.argv = argv
     codigo_papel, salida_papel = _capturar(generar_papel.main)
     if codigo_papel != 0:

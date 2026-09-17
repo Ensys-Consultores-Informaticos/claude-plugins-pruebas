@@ -29,6 +29,14 @@ transcribe el sello en `token` y el cruce lo usa en vez del nombre. Qué probar:
 «tachadas» de punta a punta —que las imágenes que suben no lleven el nombre del emisor, que el papel salga
 igual que en claro (la calibración era 42/42 y 18/18), y qué tarda (unos 4 s por factura en el equipo)—; y
 otra con «tal cual», que el token en la esquina no estorbe. `fsp-cumplimiento` todavía no pregunta.
+**1.13.6 (17/09/2026): `fsp-cumplimiento` se pone al día con `fsp-mum`.** Dos cosas. El **papel** adopta el
+formato de la MUM: cuatro zonas de color con su banda de título, la celda del fichero enlazada al documento,
+las fechas como fecha de verdad, los días como resta de celdas, y CIF, tercero y concepto del documento, que
+antes no salían. Los atributos siguen en blanco: un atributo es un veredicto y lo firma el auditor. Y el skill
+**usa el perfil**: `configurar(perfil = "fsp-cumplimiento")` al empezar, la muestra con el tercero tokenizado
+por la contrapartida, la pregunta «¿tachadas o tal cual?» antes de preparar las facturas, y `rehidratar` al
+entregar. Qué probar: una prueba de cumplimiento de punta a punta con «tachadas», y que el papel salga igual
+que en claro.
 **1.13.5 (16/09/2026), de la calibración (la MUM de ventas de 42 elementos con «tachadas»):** pasó —los 42 terceros
 tokenizados por contrapartida, las 44 imágenes tachadas, la rehidratación sin ningún token sin nombre, y el único
 elemento sin atar es la diferencia real, que tampoco ata en claro—. Dos arreglos de ahí: una factura que no lleva el

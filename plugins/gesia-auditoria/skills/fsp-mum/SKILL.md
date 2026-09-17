@@ -21,7 +21,7 @@ description: >
   arrancado, el expediente con cliente de muestreo vinculado (o el .cli
   directamente), y la carpeta con los documentos escaneados.
 ---
-_Versión del skill: 16/09/2026 · plugin interno 1.41.0 · pide MCP ≥ 1.14.5._
+_Versión del skill: 16/09/2026 · plugin interno 1.42.0 · pide MCP ≥ 1.14.5._
 
 
 # Prueba MUM de ForSampling (fsp-mum)

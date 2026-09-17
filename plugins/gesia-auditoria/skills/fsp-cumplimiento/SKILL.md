@@ -21,6 +21,8 @@ description: >
   expediente con cliente de muestreo vinculado (o el .cli directamente), y la
   carpeta con los documentos escaneados.
 ---
+_Versión del skill: 17/09/2026 · plugin interno 1.42.0 · pide MCP ≥ 1.14.5._
+
 
 # Prueba de cumplimiento de ForSampling (fsp-cumplimiento)
 
@@ -83,6 +85,13 @@ Son cuatro: `preparar_documentos.py` (inventaría y renderiza las páginas que h
 y lleva la cuenta de lo transcrito), `verificar_contrato.py`, `generar_papel.py` y
 `ejecutar_fsp.py`, que encadena los dos últimos. Más `probar_fsp.py`, el arnés.
 
+**El papel va en cuatro zonas de color** —A los datos de la muestra, B el documento y lo
+leído en él, C los atributos y la observación, D la evidencia del cruce—, con la celda del
+fichero enlazada al documento, las fechas como fecha de verdad y los días como resta de
+celdas. Es el mismo formato que el papel de la MUM, traído aquí el 17/09/2026. Lo que no se
+trae de allí son las columnas medidas: **los atributos siguen en blanco**, porque un atributo
+es un veredicto y lo firma el auditor.
+
 ---
 
 ## Secuencia
@@ -90,9 +99,41 @@ y lleva la cuenta de lo transcrito), `verificar_contrato.py`, `generar_papel.py`
 ### Paso 1 — Expediente, cliente de muestreo y prueba
 
 ```
-configurar()            # sin parámetros: ver estado
+configurar(perfil = "fsp-cumplimiento")   # primero: el tercero de la muestra, tokenizado
 contexto_expediente()
 ```
+
+Si la primera llamada al MCP falla con **«Connection closed»** o **«Server … unavailable»**,
+**reintenta hasta tres veces** antes de decir nada: el conector tarda unos segundos en
+arrancar y la primera petición puede llegar antes. Si a la tercera sigue igual, entonces sí:
+pídele que reinicie Claude del todo.
+
+**Lo primero, antes de leer nada: `configurar(perfil = "fsp-cumplimiento")`.** Con el perfil, la
+muestra que exporta el MCP lleva el tercero de cada elemento como **token** —`PROV 40000012`,
+`CLI 43000007`— en vez de la razón social, y cualquier otra columna de texto de la fila pierde
+las palabras del nombre. El token es la cuenta del tercero, que en una población de compras no
+es la de la fila (esa es la de gasto) sino **la contrapartida del asiento en el diario**; el MCP
+la busca solo. El nombre no sale del equipo del auditor —ni al contenedor ni a este chat—; el
+papel lo recupera al final con `rehidratar`. Trabaja y habla **por token**: «el elemento 18,
+PROV 40000012, la factura pone 4.500,00 y libros 4.950,00». **Nunca preguntes al auditor a quién
+corresponde un token ni lo adivines** por el documento: él lo lee en el papel. Si `configurar()`
+dice `nombres_terceros: en claro — forzado por el auditor`, es que lo ha apagado él; no lo
+vuelvas a encender tú.
+
+**Las facturas escaneadas las decide el auditor, en el paso 4**: tachadas en su equipo antes de
+subir, o tal cual. Con el perfil puesto, las prepara el MCP en cualquiera de los dos casos y en
+las dos va estampado el token del emisor, así que el cruce conserva el tercero. Si el auditor
+prefiere que tampoco la muestra viaje anonimizada, el interruptor es suyo:
+`configurar(nombres = "claro")`.
+
+**El diario, cuando el fichero activo es un `.cli`.** El `.cli` no vincula diario, y el MCP
+necesita el diario del que salió la población para encontrar la contrapartida. `configurar()`
+lo dice en `diario`. Pregúntaselo al auditor con esta frase, tal cual: *«Necesito la
+contrapartida de cada elemento para tokenizar al tercero; la saco del diario directamente si me
+indicas dónde está —el .smn que importó ForSampling, normalmente en `Muestreo\SesionesImportacion`—»*.
+Pásala con `configurar(smn_file = "<ruta>")`. Si no lo tiene o no lo sabe, **sigue**: la muestra
+saldrá con tokens de reserva (`TER h…`) y el papel lo hace constar. Con un `.gs3` activo no hay
+nada que preguntar: el diario es el del expediente.
 
 Si el fichero activo es un `.gs3`, `configurar` deduce solo el `.cli` del cliente de
 muestreo (`cli_file`). Si dice «sin cliente de muestreo vinculado», el encargo no
@@ -127,6 +168,17 @@ exportar_consulta(entidad = "evaluacion", id = <MuestraId>, ruta = "<DATOS>/eval
 Con ella, al ejecutar se imprime la comparación celda a celda: lo que puso el auditor
 frente a lo que propone el skill. No va al papel, va a la pantalla, y es la calibración
 del skill sobre ese encargo: donde se ve si se dejaría pasar algo.
+
+**Lee el resumen de la exportación de la muestra.** Trae dos líneas con el perfil:
+`muestra_tokenizada` —cuántos terceros llevan token por su cuenta, cuántos por la contrapartida
+del diario y cuántos de reserva— y `diario_comprobado` —cuántos asientos de la muestra están en
+el diario y casan en importe—. Trasládalas al auditor en una línea. Si los asientos están en el
+diario pero los importes no coinciden —una población ajustada por exclusiones o
+periodificaciones—, el MCP lo dice como `POBLACIÓN AJUSTADA`, toma la contrapartida del asiento
+igual, y **no hay que buscar otro diario**. Solo si viene el error **«ese diario no es el de esta
+población»** —los asientos no existen en él— la ruta es otra: pídesela **una vez** al auditor, y
+**no busques otro `.smn` por tu cuenta** aunque haya varios en la carpeta; si tampoco, sigue sin
+diario. Si dice `SIN DIARIO`, es lo del paso 1: tokens de reserva y adelante.
 
 **Dónde es `<DATOS>` no depende del producto, depende de una propiedad**: si los scripts
 y el MCP comparten disco. Compruébalo por la ruta que te devuelve `configurar`, no por
@@ -171,8 +223,55 @@ delante es peor que dejárselo al auditor.
 ### Paso 4 — Leer los documentos
 
 Pide la carpeta con los documentos escaneados de la prueba (puede subirla o indicarte
-dónde está; suele estar en `Documentacion\<ejercicio>\<área>` del expediente). Y prepárala
-antes de leer nada:
+dónde está; suele estar en `Documentacion\<ejercicio>\<área>` del expediente, y a veces en una
+subcarpeta `Facturas` dentro de ella; se busca en profundidad).
+
+**Y pregunta cómo quiere las facturas, con las dos opciones y su consecuencia**, como una
+pregunta con opciones y no como texto:
+
+> *¿Cómo subo las facturas escaneadas para leerlas?*
+> *Opciones: **(1) Tachadas** — el nombre del emisor, la cabecera, los identificadores (CIF,
+> IBAN, teléfono, correo, web), el pie y los márgenes salen en negro en tu equipo antes de
+> subir; el modelo lee importes, fechas y número, y en vez del nombre ve el mismo código que en
+> la muestra. **(2) Tal cual** — la factura sube completa, con el nombre del emisor, y puedes
+> pedirme que revise su contenido; el código del emisor va en una esquina.*
+
+Es su decisión y hay que hacerla sabiendo lo que implica; no la tomes tú ni la des por hecha de
+una sesión a otra. **Con el perfil puesto, en los dos casos las imágenes las hace el MCP** en el
+equipo del auditor, y a la nube solo suben esas imágenes, nunca los PDF:
+
+```
+preparar_facturas(carpeta = "<la carpeta>",
+                  destino = "<raíz de la carpeta conectada>\\_tmp_cowork\\facturas",
+                  modo = "tachadas" | "claras",
+                  terceros = [<los tokens de tercero de la muestra exportada, sin repetir>])
+```
+
+`terceros` son los candidatos a emisor: pásalos siempre —salen de `muestra.json`—, porque sin
+ellos el casado va contra el diccionario entero y es menos fiable. **La llamada es incremental y
+se para sola a los 45 segundos** —unos 2 a 4 por documento—: si la respuesta trae `pendientes > 0`,
+**vuelve a llamar con los mismos parámetros** hasta que sea 0; lo hecho no se rehace. Va en dos
+fases (`fase` en la respuesta): primero **lee** todo el lote y luego **tacha**; una llamada puede
+acabar en `lectura` con `imagenes: 0` y no es un fallo, es que hace falta el lote entero para
+casar bien al emisor. Si una factura no lleva el total en la primera página —las que paginan con
+«Suma y sigue»—, el MCP **añade su última página él solo** y lo cuenta en `ultimas_paginas`. Y si
+Cowork corta la llamada («did not respond within 60s»), no es un fallo: el MCP siguió trabajando
+en el equipo, llama otra vez y verás lo hecho como `ya_hechos`. Con más de diez facturas, avisa
+al auditor de que va a tardar. Trasládale los recuentos en una línea —documentos, con token
+estampado, ambiguos y sin casar, qué se ha tapado, justificantes apartados—, sin nombres, que no
+los hay. Los que quedan sin sello se cruzan por importe, número y fecha: un sello equivocado es
+peor que ninguno, y el MCP prefiere no estampar cuando duda.
+
+Deja en `destino` un JPEG por página a 100 ppp y un `manifiesto.json` que
+`preparar_documentos.py` lee tal cual: **sube esa carpeta dentro del mismo `$DATOS` del paso 2**
+(en Cowork, `device_stage_files` sobre `_tmp_cowork\facturas`; queda como `$DATOS/facturas/`).
+**No es otro `$DATOS`**: `muestra.json`, `parametros.json` y `facturas/` conviven en el mismo
+directorio, y el script encuentra el manifiesto en esa subcarpeta solo. Los pasos siguientes
+—`--lotes`, `--fusionar`, `--estado`— son los mismos, y ese `manifiesto.json` es el que se le
+pasa al papel en el paso 5 para que la celda del fichero enlace al documento.
+
+**Sin perfil** —o si `preparar_facturas` no existe porque el MCP es anterior a la 1.14.0—, el
+script del skill renderiza él, en claro:
 
 ```bash
 python "$SKILL/scripts/preparar_documentos.py" --carpeta "<la carpeta>" --trabajo "$DATOS"
@@ -220,6 +319,11 @@ la que falte y no des ningún total por leído hasta verlo escrito como total:
 python "$SKILL/scripts/preparar_documentos.py" --trabajo "$DATOS" --ampliar "<fichero>"
 # y con --pagina N si hace falta una concreta en vez de la última
 ```
+
+**Si las imágenes las hizo el MCP, `--ampliar` no vale**: renderizar el PDF aquí se saltaría el
+tachado. La página que falte se le pide otra vez al MCP con
+`preparar_facturas(..., documentos = ["<fichero>"], paginas = [-1])` y se vuelve a subir la
+carpeta. El propio script lo dice cuando el manifiesto es suyo.
 
 De cada factura anota lo siguiente, y **escribe `<DATOS>/facturas.json` cada cinco o seis
 documentos**, no al final:
@@ -301,10 +405,16 @@ python "$SKILL/scripts/ejecutar_fsp.py" \
     --muestra "$DATOS/muestra.json" --parametros "$DATOS/parametros.json" \
     --facturas "$DATOS/facturas.json" --roles "$DATOS/roles.json" \
     --evaluacion "$DATOS/evaluacion.json" \
+    --manifiesto "$DATOS/manifiesto.json" \
     --salida "$TRABAJO/$PAPEL" --generado "<AAAA-MM-DD, la fecha que te dé el usuario>"
 ```
 
-`--evaluacion` solo si existe. `--generado` es la fecha de generación, que se pasa
+`--evaluacion` solo si existe. **`--manifiesto`** es lo que hace que la celda del fichero
+sea un **hipervínculo** al documento: sin él las celdas quedan como texto. Si los scripts
+corren en un contenedor —Cowork— la ruta que ve el script no existe en la máquina del
+auditor, pero la del manifiesto sí es la suya y el vínculo funciona allí; el script avisa
+de los que él no ve, y eso es normal. Si el auditor mueve los documentos después, se rehace
+con `--carpeta-documentos` y la carpeta buena de Windows. `--generado` es la fecha de generación, que se pasa
 porque **nada lee el reloj**: el papel tiene que poder regenerarse idéntico.
 
 Salida `2` → **para**: el contrato no se cumple —la población no tiene columna de
@@ -341,11 +451,35 @@ pasar. «Skill señala, auditor Sí» hay que mirarlos, no darlos por error del 
 la calibración eran dos, los dos del mismo elemento, y el propio auditor tenía la
 diferencia anotada a mano en la factura.
 
+**Los nombres.** El papel se ha escrito con tokens en las columnas de la muestra (la columna del
+documento leído, `Proveedor o cliente`, lleva lo que decía la factura). Cuando ya esté en el disco
+del auditor —en Cowork, después de bajarlo al expediente con `device_commit_files`; en local,
+directamente—, llama a `rehidratar(ruta = "<expediente>/InformesGesia/FspCumplimiento/<fichero>",
+leyenda = true)`: sustituye cada token por el nombre real, en local, y devuelve recuentos —ni un
+nombre vuelve aquí—. Con `leyenda = true` añade la hoja «Tokens» con la equivalencia, para que lo
+que has dicho en el chat con tokens se pueda leer en el papel. **Cuéntale al auditor los dos
+números que devuelve** (sustituciones y tokens distintos) y, si hay `tokens_sin_nombre`, dilos tal
+cual: no los completes tú. Los tokens de reserva `TER h…` rehidratan igual: su nombre es el texto
+del apunte, que el diccionario guardó al tokenizar.
+
+Sin llamar «rehidratar» a nada delante del auditor —para él es **desanonimizar**—:
+
+> *Papel generado y archivado en el expediente: `InformesGesia\FspCumplimiento\<fichero>` (también
+> lo tienes en el chat, aunque esa copia está anonimizada). Nombres ya desanonimizados: N
+> sustituciones, M terceros distintos, ninguno sin nombre, y hoja «Tokens» con la leyenda. Los
+> temporales están borrados.*
+
+La copia del chat **siempre** está anonimizada —viajó por el contenedor—: dilo, para que no la
+confunda con el papel bueno. **El diccionario de nombres no se borra**: vive con el encargo,
+cifrado, y es lo que permite rehidratar un papel de hace días.
+
 **Lo que no digas**: si la prueba pasa o no. Eso es del auditor y de ForSampling.
 
 **Los temporales.** `parametros.json` lo escribiste tú desde la respuesta de `obtener_entidad`, así que `limpiar_exportaciones()` **no lo borra**: bórralo aparte, y en una carpeta conectada puede pedir permiso de borrado. `limpiar_exportaciones()` borra la muestra y la evaluación
-exportadas. `facturas.json` y `roles.json` los escribiste tú: bórralos con el
-directorio de trabajo. Los PDF no se copian a ningún sitio.
+exportadas y, desde el MCP 1.14.3, **también las imágenes y el `manifiesto.json` que
+`preparar_facturas` dejó en `_tmp_cowork\facturas`** (con un MCP anterior quedan ahí: dilo al
+auditor con la ruta, que en Cowork no tienes shell en su equipo). `facturas.json` y `roles.json`
+los escribiste tú: bórralos con el directorio de trabajo. Los PDF no se copian a ningún sitio.
 
 ---
 
@@ -402,6 +536,13 @@ porque el papel ya no lo lleva escrito.
 | Una columna de tercero que vale lo mismo en todas las filas | el skill cambia de columna solo, y lo avisa (A00) |
 | Dos documentos del mismo tercero encajan igual en un elemento | sigue: gana el de fecha más cercana; si empatan, el atributo de documento lo dice y pide confirmación |
 | Un elemento sin documento y un documento sobrante del mismo tercero | sigue, y el script lo señala como POSIBLE DIFERENCIA: se ata con `poblacion_id` |
+| Fichero activo `.cli` y el auditor no sabe dónde está el diario | sigue: la muestra sale con tokens de reserva `TER h…`, el cruce va sin tercero, y el papel lo dice |
+| El `.smn` indicado no es el de la población (sus asientos no existen en él) | **para** en el paso 2 con «ese diario no es el de esta población»: se pide una vez, no se busca otro |
+| Población ajustada: los asientos existen pero los importes no coinciden con el diario | sigue: el MCP toma la contrapartida del asiento y lo dice como `POBLACIÓN AJUSTADA`; no es otro diario |
+| Una factura tachada sin token (el emisor no casó con ningún tercero: logo sin texto, nombre distinto al del diario) | sigue: ese documento se cruza por importe, número y fecha, y si queda «sin documento» se ata con `poblacion_id` |
+| `preparar_facturas` devuelve `pendientes > 0`, o Cowork corta la llamada a los 60 s | sigue: se vuelve a llamar con los mismos parámetros; lo hecho no se rehace |
+| El MCP no tiene `preparar_facturas` (anterior a la 1.14.0) | sigue en claro con `preparar_documentos.py --carpeta`, y se dice que las facturas no van tachadas |
+| `rehidratar` devuelve `tokens_sin_nombre` | sigue: el papel se entrega con esos tokens tal cual y se dicen al auditor; no se completan a mano |
 
 ## Comprobar que el skill funciona
 
@@ -409,7 +550,7 @@ porque el papel ya no lo lleva escrito.
 python "$SKILL/scripts/probar_fsp.py"
 ```
 
-No hace falta ForSampling ni un solo PDF: 46 comprobaciones sobre un fixture sintético de
+No hace falta ForSampling ni un solo PDF: 61 comprobaciones sobre un fixture sintético de
 nueve elementos de respuesta conocida —factura exacta, número con formato distinto e
 importe que no cuadra, sin documento, número dentro de un concepto, contabilizada por la
 base y fuera de ventana, importe cero, honorarios con retención, alquiler cuyo documento

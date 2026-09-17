@@ -243,6 +243,56 @@ def main() -> int:
     ok(n["skill_senala_auditor_si"] >= 3, "el skill senala donde el auditor puso Si (E2 importe, E3, E4, E5): a revisar, no a callar")
     ok(n["auditor"] == 12, "12 celdas quedan al auditor (2 atributos x 6 elementos)")
 
+    # -- el papel: el formato de la MUM traido a cumplimiento (17/09/2026)
+    import tempfile as _tf
+    from pathlib import Path as _P
+    from openpyxl import Workbook as _WB, load_workbook as _LW
+    import generar_papel as _gp
+    _params = {"MuestraId": 99, "Tipo": "Cumplimiento", "Area": "CG", "Referencia": "CG)1/0",
+               "Prueba": "Compras 25", "FechaInicioAuditoria": "01/01/2025", "FechaFinAuditoria": "31/12/2025",
+               "parametros": {"TamanoMuestraDeseado": 22, "PoblacionNumElementos": 332, "TasaErrorTolerable": 5}}
+    _ruta_doc = r"C:\Exp\Docs\1 - CARTONAJES FRA 251221.pdf"
+    _wb = _WB()
+    _gp._hoja_muestra(_wb, list(ev.values()), cols, ATRIBUTOS, roles, _params, "2026-09-17",
+                      {"1 - CARTONAJES FRA 251221.pdf": _ruta_doc})
+    _x = _P(_tf.mkdtemp()) / "papel.xlsx"
+    _wb.save(_x)
+    _ws = _LW(_x).active
+    _cab = [c.value for c in _ws[7]]
+    _i = {v: j + 1 for j, v in enumerate(_cab) if v}
+    _bandas = [(c.value, c.fill.fgColor.rgb[-6:]) for c in _ws[6] if c.value]
+    ok([t for t, _ in _bandas] == ["A · Datos de la muestra", "B · Datos del documento",
+                                   "C · Atributos de la prueba", "D · Evidencia del cruce"]
+       and [col for _, col in _bandas] == ["1F4E78", "217346", "C55A11", "7F7F7F"],
+       "el papel va en cuatro zonas con su banda de titulo y el color de cada una")
+    ok(_cab[len(_cab) - 3:] == ["Casa por", "Diferencia importe", "Días libros–doc."]
+       and "CIF" in _i and "Proveedor o cliente" in _i and "Concepto" in _i,
+       "la zona del documento trae CIF, tercero y concepto, y la del cruce va al final")
+    ok(_ws.cell(row=8, column=_i["Fichero"]).hyperlink is not None
+       and _ws.cell(row=8, column=_i["Fichero"]).hyperlink.target == _ruta_doc
+       and _ws.cell(row=10, column=_i["Fichero"]).hyperlink is None,
+       "la celda del fichero enlaza al documento con su ruta de Windows, y un elemento sin documento no enlaza")
+    from datetime import datetime as _dt
+    ok(isinstance(_ws.cell(row=8, column=_i["Fecha"]).value, _dt)
+       and isinstance(_ws.cell(row=8, column=_i["Fecha doc."]).value, _dt)
+       and _ws.cell(row=8, column=_i["Fecha"]).number_format == "DD/MM/YYYY",
+       "las fechas son FECHA, no texto, y se ven como dd/mm/aaaa: asi se ordenan y se restan")
+    ok(str(_ws.cell(row=8, column=_i["Días libros–doc."]).value).startswith("=IFERROR(")
+       and _ws.cell(row=10, column=_i["Días libros–doc."]).value is None,
+       "los dias son una resta de celdas, y sin documento la celda se queda vacia")
+    ok(all(_ws.cell(row=8, column=_i[f"A{a['AtributoId']} {a['Nombre']}"]).value is None for a in ATRIBUTOS),
+       "las columnas de atributos siguen EN BLANCO: el veredicto lo firma el auditor")
+    ok(_ws.cell(row=9, column=_i["Observación propuesta"]).fill.fgColor.rgb[-6:] == "FFFF00"
+       and _ws.cell(row=8, column=_i["Observación propuesta"]).fill.fgColor.rgb[-6:] == "FDF0E6",
+       "el amarillo marca la observacion que señala algo, y donde no hay nada queda el tinte de la zona")
+    ok("tamaño de muestra 22" in _ws["A2"].value and "población 332" in _ws["A2"].value,
+       "la linea de contexto trae los parametros del muestreo que haya en DatosMuestreos")
+    _wb2 = _WB()
+    _gp._hoja_muestra(_wb2, list(ev.values()), cols, ATRIBUTOS, roles,
+                      dict(_params, parametros={}), "2026-09-17", None)
+    ok("generado 2026-09-17" in _wb2.active["A2"].value and "·  ·" not in _wb2.active["A2"].value,
+       "y sin parametros la linea no deja separadores huerfanos")
+
     print()
     print("RESULTADO:", "todo correcto" if fallos == 0 else f"{fallos} fallo(s)")
     return 1 if fallos else 0

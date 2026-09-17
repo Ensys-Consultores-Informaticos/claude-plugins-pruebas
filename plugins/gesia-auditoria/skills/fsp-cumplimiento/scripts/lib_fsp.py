@@ -820,3 +820,55 @@ def comparar_con_auditor(evaluados: list[dict], evaluacion: dict | None, cols: d
     obs_col = next((k for k in (evaluacion["filas"][0].keys()) if k.upper().endswith("_OBSERV")), None)
     return {"filas": filas, "recuento": n, "columna_observacion": obs_col,
             "observaciones_auditor": {str(f.get(idcol)): f.get(obs_col) for f in evaluacion["filas"]} if obs_col else {}}
+
+
+# ── El hipervinculo del papel al documento ───────────────────────────────────
+#
+# Vive aqui, y no en el generador de cada skill, porque los dos papeles enlazan igual.
+
+_RE_RUTA_WINDOWS = re.compile(r"^[A-Za-z]:[\\/]|^\\\\")
+
+
+def _absoluta(ruta: str) -> str:
+    """Una ruta de Windows NO se toca desde el contenedor: Path.resolve() le ponia delante
+    /home/claude/ y el vinculo del papel salia roto (registro del 16/09/2026)."""
+    ruta = str(ruta)
+    if _RE_RUTA_WINDOWS.match(ruta):
+        return ruta
+    return str(Path(ruta).resolve())
+
+
+def _bajo(base: str, nombre: str) -> str:
+    """base/nombre respetando el separador de la base: una carpeta de Windows lleva '\\'."""
+    if _RE_RUTA_WINDOWS.match(base):
+        return base.rstrip("\\/") + "\\" + nombre
+    return _absoluta(str(Path(base) / nombre))
+
+
+def rutas_documentos(manifiesto: str | None, carpeta: str | None) -> dict[str, str]:
+    """{nombre de fichero: ruta ABSOLUTA} para los hipervinculos del papel.
+
+    `carpeta` manda sobre el manifiesto, y es la salida para Cowork: la ruta que ve
+    un script dentro del contenedor no existe en la maquina del auditor, asi que el
+    vinculo se rehace sobre la carpeta de Windows que el usuario indique. Sin
+    ninguna de las dos se devuelve vacio y las celdas quedan como texto: un vinculo
+    roto en un papel de trabajo es peor que ninguno.
+    """
+    rutas: dict[str, str] = {}
+    if manifiesto:
+        pm = Path(manifiesto)
+        if not pm.exists() and (pm.parent / "facturas" / "manifiesto.json").exists():
+            pm = pm.parent / "facturas" / "manifiesto.json"   # la carpeta de preparar_facturas, subida entera
+        if pm.exists():
+            man = cargar_json(str(pm))
+            for d in man.get("documentos") or []:
+                nombre, ruta = d.get("fichero"), d.get("ruta")
+                if nombre and ruta:
+                    rutas[nombre] = _absoluta(ruta)
+    if carpeta:
+        base = Path(carpeta)
+        nombres = set(rutas) or set()
+        if not nombres and base.is_dir():
+            nombres = {p.name for p in base.iterdir() if p.is_file()}
+        rutas = {n: _bajo(str(carpeta), n) for n in nombres}
+    return rutas
