@@ -144,8 +144,12 @@ _ROLES_COLUMNA = {
     "fecha": (r"^fecha$", r"fecha"),
     "importe": (r"^saldo$", r"^importe$", r"^debe$", r"^haber$"),
     "cuenta": (r"^cuentacontable$", r"^cuenta$", r"^cta\d?$"),
-    "tercero": (r"apunte$", r"^nombrecuenta$", r"^nombre$", r"^tercero$", r"^proveedor",
-                r"^acreedor", r"^cliente", r"^descripci", r"^concepto$"),
+    # `nombrecontrap` es el nombre de la contrapartida del asiento: en una poblacion de gasto es
+    # EL proveedor. Va PRIMERO, y tiene que estar aqui aunque ya este en el MCP: si las dos
+    # listas no coinciden, el skill elige una columna y el MCP tokeniza otra, y al tachado le
+    # llegan tokens que no son de ningun proveedor (18/09/2026, cuatro nombres sin tapar).
+    "tercero": (r"^nombrecontrap", r"apunte$", r"^nombrecuenta$", r"^nombre$", r"^tercero$",
+                r"^proveedor", r"^acreedor", r"^cliente", r"^descripci", r"^concepto$"),
     "documento": (r"^factura$", r"^documento$", r"^nfactura$", r"^numfactura$",
                   r"^concepto$", r"^descripcinconcepto$"),
     "asiento": (r"asiento", r"^numeroasiento$"),
@@ -181,6 +185,18 @@ def _distintos(muestra: list[dict], col: str) -> int:
     return len({str(f.get(col) or "").strip().upper() for f in muestra if str(f.get(col) or "").strip()})
 
 
+_RE_TOKEN_CUENTA = re.compile(r"^\s*(?:PROV|CLI|TER) \d{3,}\s*$")
+
+
+def _tokens_de_cuenta(muestra: list[dict], col: str) -> int:
+    """Cuantos valores de la columna son el token de una CUENTA, no uno de reserva.
+
+    Es lo que distingue la columna que el MCP eligio para el tercero -la tokeniza con la cuenta
+    de la contrapartida- de las demas columnas de nombres, que tokeniza siempre por reserva.
+    """
+    return sum(1 for f in muestra if _RE_TOKEN_CUENTA.match(str(f.get(col) or "")))
+
+
 def afinar_columnas(muestra: list[dict], cols: dict) -> tuple[dict, list[str]]:
     """Reelige 'tercero' y 'documento' mirando TODAS las filas, no solo la primera.
 
@@ -214,6 +230,21 @@ def afinar_columnas(muestra: list[dict], cols: dict) -> tuple[dict, list[str]]:
         # tenga un valor distinto mas es ruido: en una MUM medida el 03/09/2026,
         # la columna correcta tenia 5 valores en 6 filas y la otra 6.
         elegida = cols.get(rol)
+        # El MCP ya decidio cual es el tercero, y lo dice en el DATO: esa columna lleva el token
+        # de la cuenta y las demas, tokens de reserva. Si hay una asi y la elegida no lo es, se
+        # cambia sin mas: elegir otra manda al tachado tokens que no son de ningun proveedor y
+        # el nombre acaba subiendo a la vista (18/09/2026).
+        if rol == "tercero":
+            con_cuenta = [c for c in candidatas if _tokens_de_cuenta(muestra, c)]
+            if con_cuenta and not _tokens_de_cuenta(muestra, elegida or ""):
+                mejor_t = max(con_cuenta, key=lambda c: _tokens_de_cuenta(muestra, c))
+                if mejor_t != elegida:
+                    avisos.append(f"la columna de tercero pasa de «{elegida}» a «{mejor_t}»: es la que el "
+                                  f"MCP ha tokenizado por la cuenta de la contrapartida "
+                                  f"({_tokens_de_cuenta(muestra, mejor_t)} de {len(muestra)} filas), "
+                                  f"y «{elegida}» solo lleva tokens de reserva")
+                    cols[rol] = mejor_t
+                continue
         mejor = max(candidatas, key=lambda c: (_distintos(muestra, c), c == elegida))
         d_ele, d_mej = _distintos(muestra, elegida) if elegida else 0, _distintos(muestra, mejor)
         if elegida != mejor and (d_ele <= 1 or d_ele * 2 <= d_mej):
@@ -406,6 +437,24 @@ def _importe_fila(fila: dict, cols: dict) -> float | None:
     return v
 
 
+def base_de(fac: dict) -> float | None:
+    """La base imponible del documento, derivandola si no viene rotulada.
+
+    Hay facturas -suministros, sobre todo- que desglosan por conceptos y no rotulan ninguna linea
+    como «base imponible»: el lector devuelve `base` vacia y el cruce se queda sin con que
+    comparar (18/09/2026, un elemento de asiento partido que hubo que atar a mano). Si el
+    documento trae total e IVA legibles, la base es la resta. No se inventa nada: si falta
+    cualquiera de los dos, sigue vacia.
+    """
+    base = parse_importe(fac.get("base"))
+    if base is not None:
+        return base
+    total, iva = parse_importe(fac.get("total")), parse_importe(fac.get("iva"))
+    if total is None or iva is None:
+        return None
+    return round(total - iva, 2)
+
+
 def _irpf(fac: dict) -> float | None:
     """La retencion practicada, si el documento la lleva. Vacio y cero son lo mismo."""
     v = parse_importe(fac.get("irpf"))
@@ -493,7 +542,7 @@ def _puntuar(fila: dict, cols: dict, fac: dict) -> dict:
     """Que criterios casan entre una fila de la muestra y un documento leido."""
     imp = _importe_fila(fila, cols)
     total = parse_importe(fac.get("total"))
-    base = parse_importe(fac.get("base"))
+    base = base_de(fac)
     num_fila = _numero_fila(fila, cols)
     num_fac = fac.get("numero")
     f_fila = parse_fecha(fila.get(cols.get("fecha")))

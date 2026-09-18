@@ -27,7 +27,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from lib_fsp import columnas_de_muestra, cruzar, detectar_columnas, salida_utf8  # noqa: E402
+from lib_fsp import base_de, columnas_de_muestra, cruzar, detectar_columnas, salida_utf8  # noqa: E402
 from lib_mum import (  # noqa: E402
     comparar_con_auditor_mum,
     evaluar_mum,
@@ -157,6 +157,20 @@ def main() -> int:
        "E10: y la observacion lleva al auditor a las lineas y dice cuanto suman")
     ok(e1["error"] == 0.0 and e2["error"] == 450.0,
        "un elemento que NO esta partido no cambia en nada")
+    # la columna del tercero: la del MCP y la del skill tienen que ser LA MISMA (18/09/2026)
+    _mc = [{"Hoja1_ID": str(i), "FECHA": "01/03/25 0:00:00", "CUENTA": "60000000%d" % (i % 3),
+            "ASIENTO": 1000 + i, "SALDO": "100,00", "NOMBRE": "TER h%06x" % (i % 6),
+            "NOMBRECONTRAP": "PROV 4000000%02d" % (i % 9)} for i in range(14)]
+    ok(columnas_de_muestra(_mc)[0].get("tercero") == "NOMBRECONTRAP",
+       "el tercero es la columna con tokens de CUENTA, no la que solo lleva tokens de reserva")
+    _sc = [{k: v for k, v in f.items() if k != "NOMBRECONTRAP"} for f in _mc]
+    ok(columnas_de_muestra(_sc)[0].get("tercero") == "NOMBRE",
+       "y sin columna de contrapartida se sigue eligiendo como siempre")
+    ok(base_de({"base": "1000,00", "iva": "210,00", "total": "1210,00"}) == 1000.0
+       and base_de({"base": "", "iva": "404,55", "total": "2330,96"}) == 1926.41
+       and base_de({"base": "", "iva": "", "total": "2330,96"}) is None,
+       "la base se deriva de total - iva cuando el documento no la rotula, y no se inventa sin IVA")
+
     # importe_aplicable: la anulacion a mano para lo que el reparto automatico no ve
     _m2 = copy.deepcopy(MUESTRA); _f2 = copy.deepcopy(FACTURAS)
     for _x in _f2:

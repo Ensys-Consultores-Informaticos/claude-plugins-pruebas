@@ -21,7 +21,7 @@ description: >
   expediente con cliente de muestreo vinculado (o el .cli directamente), y la
   carpeta con los documentos escaneados.
 ---
-_Versión del skill: 18/09/2026 · plugin interno 1.47.0 · pide MCP ≥ 1.17.0._
+_Versión del skill: 18/09/2026 · plugin interno 1.49.0 · pide MCP ≥ 1.18.0._
 
 
 # Prueba de cumplimiento de ForSampling (fsp-cumplimiento)
@@ -341,6 +341,15 @@ python "$SKILL/scripts/preparar_documentos.py" --trabajo "$DATOS" --fusionar
 junta los lotes en `facturas.json` y te dice si falta algún documento del inventario o si
 algún lector se inventó uno. Con todo transcrito, sigue en el paso siguiente. **Solo si tu
 entorno no tiene subagentes**, lee las imágenes tú, como sigue.
+
+**Si la respuesta trae `aviso_sin_casar`, para y cuéntaselo al auditor antes de subir nada.**
+Esos documentos suben **sin tapar el nombre del emisor**: el tachado tapa la cabecera y los
+identificadores siempre, pero la razón social solo se tapa cuando se reconoce, y lo que no casa con
+ningún tercero de la muestra no se reconoce. Pasa con lo que no es una factura —un pedido, un
+certificado, un comprobante de pago— y con logotipos sin texto. El 18/09/2026 subieron así cuatro
+documentos, uno con el DNI de una persona física en una página adjunta. Comprueba además que
+`terceros` lleva los tokens de la **columna que el MCP ha tokenizado**: si el papel muestra tokens
+distintos de los que pasaste, el tachado está casando contra la columna equivocada.
 
 **Antes de dar por buena ninguna lectura, mira el aviso de páginas sin ver.** `preparar_facturas`
 devuelve `paginas_sin_ver` —por id de documento— y el inventario lo imprime con `[A]`. Sólo se

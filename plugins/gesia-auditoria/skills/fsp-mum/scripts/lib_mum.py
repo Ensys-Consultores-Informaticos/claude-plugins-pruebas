@@ -24,7 +24,7 @@ quien lee esta prueba, y ha pasado.
 """
 from __future__ import annotations
 
-from lib_fsp import _fmt, _irpf, parse_importe
+from lib_fsp import _fmt, _irpf, base_de, parse_importe
 
 TOL = 0.01          # un céntimo, igual que en el cruce
 TOL_IVA_PISTA = 0.5  # margen al reconocer una diferencia como cuota de IVA
@@ -51,7 +51,7 @@ def _valor(fac: dict, termino: str) -> float | None:
     if termino == "total":
         return parse_importe(fac.get("total"))
     if termino == "base":
-        return parse_importe(fac.get("base"))
+        return base_de(fac)
     if termino == "neto":
         base, iva, ret = (parse_importe(fac.get("base")), parse_importe(fac.get("iva")), _irpf(fac))
         if base is None or ret is None:

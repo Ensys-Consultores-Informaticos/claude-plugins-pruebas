@@ -29,6 +29,17 @@ transcribe el sello en `token` y el cruce lo usa en vez del nombre. Qué probar:
 «tachadas» de punta a punta —que las imágenes que suben no lleven el nombre del emisor, que el papel salga
 igual que en claro (la calibración era 42/42 y 18/18), y qué tarda (unos 4 s por factura en el equipo)—; y
 otra con «tal cual», que el token en la esquina no estorbe. `fsp-cumplimiento` todavía no pregunta.
+**1.13.13 (18/09/2026), de la prueba en frío de la MUM: cuatro nombres subieron sin tapar.**
+El tachado tapa la cabecera y los identificadores siempre, pero la razón social solo la tapa cuando **reconoce**
+al emisor, y para reconocerlo usa los códigos de tercero que le pasa el skill. Resultó que el MCP y el skill
+estaban eligiendo **columnas distintas** de la muestra: el MCP protegía la del proveedor y el skill le mandaba al
+tachado los códigos de otra columna, la descripción de la cuenta de gasto. Con códigos que no son de ningún
+proveedor, el reconocimiento no podía funcionar. Arreglado en los dos sitios, y ahora el skill deduce la columna
+buena **del propio dato** en vez de decidirlo por su cuenta. Además, si algún documento no se reconoce —un pedido,
+un certificado, un logotipo sin texto—, la respuesta lo dice con todas las letras para que lo veas antes de subir.
+Dos cosas más: la base imponible se **deriva de total − IVA** cuando la factura no la rotula (pasa en suministros),
+así que ya no hay que escribirla a mano; y la limpieza final vuelve a ser legible — listaba 8.272 ficheros porque
+se había quedado apuntada la carpeta temporal del sistema entera, y ahora enseña 2.
 **1.13.12 (18/09/2026): el registro de ejecución separa el síntoma de su explicación.**
 Mismo MCP (1.17.0). `registro-ejecucion` marcaba [OBSERVADO] o [HIPÓTESIS] cada fricción, y eso funcionaba
 para **lo que pasó**. Pero la explicación de **por qué** pasa viajaba dentro del arreglo propuesto, donde nadie

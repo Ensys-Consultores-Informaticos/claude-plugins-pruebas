@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "gesia-plugin": {
-      "command": "${CLAUDE_PLUGIN_ROOT}/server/gesia_mcp-1.17.0.exe",
+      "command": "${CLAUDE_PLUGIN_ROOT}/server/gesia_mcp-1.18.0.exe",
       "args": [],
       "env": {}
     }
