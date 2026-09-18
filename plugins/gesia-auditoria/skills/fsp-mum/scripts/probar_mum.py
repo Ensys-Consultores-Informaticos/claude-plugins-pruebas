@@ -21,6 +21,7 @@ en fsp-cumplimiento.
 """
 from __future__ import annotations
 
+import copy
 import hashlib
 import sys
 from pathlib import Path
@@ -52,6 +53,14 @@ MUESTRA = [
      "CuentaContable": "62900000", "DescripcinApunte": "DELTA", "Saldo": "12100", "Acreedor": "DELTA SERVICIOS"},
     {"GA1Poblacion_ID": "8", "Seleccionado": "True", "Repeticiones": "1", "Fecha": "10/11/25 0:00:00",
      "CuentaContable": "62900000", "DescripcinApunte": "OMEGA", "Saldo": "", "Acreedor": "OMEGA"},
+    # E9 y E10: el asiento esta PARTIDO en dos lineas de la poblacion y la muestra cogio una.
+    # Las tres columnas ultimas las adjunta el MCP desde la propia poblacion (no del diario).
+    {"GA1Poblacion_ID": "9", "Seleccionado": "True", "Repeticiones": "1", "Fecha": "04/12/25 0:00:00",
+     "CuentaContable": "60000001", "DescripcinApunte": "EPSILON", "Saldo": "8000", "Acreedor": "EPSILON",
+     "LineasAsiento": 2, "ImporteAsiento": 10000.0, "IdsAsiento": "9, 11"},
+    {"GA1Poblacion_ID": "10", "Seleccionado": "True", "Repeticiones": "1", "Fecha": "09/12/25 0:00:00",
+     "CuentaContable": "60000001", "DescripcinApunte": "ZETA", "Saldo": "8400", "Acreedor": "ZETA, S.L.",
+     "LineasAsiento": 2, "ImporteAsiento": 10500.0, "IdsAsiento": "10, 12"},
 ]
 
 FACTURAS = [
@@ -71,6 +80,12 @@ FACTURAS = [
     # E6: ingreso, el documento dice 7.900 y los libros 8.000
     {"fichero": "6 - CLIENTE DOS FV-77.pdf", "proveedor": "CLIENTE DOS, S.L.", "numero": "FV-77",
      "fecha": "01/09/2025", "base": "7900,00", "iva": "1659,00", "total": "9559,00"},
+    # E9: el documento sostiene la SUMA del asiento (10.000), no esta linea (8.000)
+    {"fichero": "9 - EPSILON E-55.pdf", "proveedor": "EPSILON", "numero": "E-55",
+     "fecha": "04/12/2025", "base": "10000,00", "iva": "2100,00", "total": "12100,00"},
+    # E10: no sostiene ni la linea (8.400) ni la suma del asiento (10.500)
+    {"fichero": "10 - ZETA Z-90.pdf", "proveedor": "ZETA, S.L.", "numero": "Z-90",
+     "fecha": "09/12/2025", "base": "9800,00", "iva": "2058,00", "total": "11858,00"},
     # E7: sin total legible; los libros llevan 12.100 = base + 21 %
     {"fichero": "7 - DELTA 5512.pdf", "proveedor": "DELTA SERVICIOS", "numero": "5512",
      "fecha": "06/10/2025", "base": "10000,00", "iva": "", "total": "", "notas": "total ilegible"},
@@ -109,7 +124,7 @@ def main() -> int:
     for e in ev:
         e["observacion"] = observacion_mum(e)
     por_id = {e["fila"]["GA1Poblacion_ID"]: e for e in ev}
-    e1, e2, e3, e4, e5, e6, e7, e8 = (por_id[str(i)] for i in range(1, 9))
+    e1, e2, e3, e4, e5, e6, e7, e8, e9, e10 = (por_id[str(i)] for i in range(1, 11))
 
     # -- el termino de comparacion sale de la muestra, no del plan contable
     ok(termino_mayoritario(cruce["filas"]) == "base",
@@ -131,6 +146,28 @@ def main() -> int:
     ok("4.950,00" not in e2["observacion"] and "4.500,00" not in e2["observacion"]
        and "9,09" not in e2["observacion"],
        "E2: y NO repite el saldo, el valor de auditoria ni el %: cada uno esta en su columna")
+    ok(e9["error"] == 0.0 and e9["saldo_auditoria"] == 8000.0,
+       "E9: linea de un asiento partido cuya SUMA sostiene el documento -> medido, error 0")
+    ok("asiento entero" in e9["observacion"] and "9, 11" in e9["observacion"],
+       "E9: y la observacion dice que el documento cubre el asiento, y donde estan sus lineas")
+    ok(e10["error"] is None and e10["saldo_auditoria"] is None,
+       "E10: si no casa ni la linea ni la suma, NO se propone importe (el error falso seria la otra linea)")
+    ok("10, 12" in e10["observacion"] and "10.500,00" in e10["observacion"]
+       and "Sin propuesta" in e10["observacion"],
+       "E10: y la observacion lleva al auditor a las lineas y dice cuanto suman")
+    ok(e1["error"] == 0.0 and e2["error"] == 450.0,
+       "un elemento que NO esta partido no cambia en nada")
+    # importe_aplicable: la anulacion a mano para lo que el reparto automatico no ve
+    _m2 = copy.deepcopy(MUESTRA); _f2 = copy.deepcopy(FACTURAS)
+    for _x in _f2:
+        if _x["fichero"].startswith("10 - ZETA"):
+            _x["poblacion_id"] = "10"; _x["importe_aplicable"] = "8400,00"
+    _e = {str(x["fila"]["GA1Poblacion_ID"]): x
+          for x in evaluar_mum(cruzar(_m2, _f2, columnas_de_muestra(_m2)[0]), columnas_de_muestra(_m2)[0])}
+    ok(_e["10"]["error"] == 0.0 and _e["10"]["saldo_auditoria"] == 8400.0,
+       "importe_aplicable declarado a mano manda: el elemento se mide contra esa parte del documento")
+    ok("a mano" in observacion_mum(_e["10"]),
+       "y la observacion dice que va declarado a mano, no deducido")
     ok(max(len(x["observacion"]) for x in ev) <= 150,
        f"ninguna observacion pasa de 150 caracteres (la mas larga: {max(len(x['observacion']) for x in ev)})")
     ok(e3["error"] is None and e3["saldo_auditoria"] is None and "no localizado" in e3["observacion"],
@@ -150,14 +187,14 @@ def main() -> int:
 
     # -- el recuento no netea NUNCA
     r = recuento(ev)
-    ok(r["elementos"] == 8 and r["repeticiones"] == 10,
-       "el recuento cuenta 8 elementos y 10 unidades de muestreo con las repeticiones")
+    ok(r["elementos"] == 10 and r["repeticiones"] == 12,
+       "el recuento cuenta 10 elementos y 12 unidades de muestreo con las repeticiones")
     ok(r["n_exceso"] == 2 and r["suma_exceso"] == 2550.0 and r["n_defecto"] == 1 and r["suma_defecto"] == -100.0,
        "exceso y defecto van POR SEPARADO: 2 por exceso suman 2.550,00 y 1 por defecto -100,00")
     ok("neto" not in r and not any("neto" in k for k in r),
        "y no existe ninguna cifra de error neto: netear una MUM esconde las incorrecciones")
-    ok(r["sin_medir"] == 2 and r["con_documento"] == 6,
-       "dos elementos quedan sin medir y seis tienen documento")
+    ok(r["sin_medir"] == 3 and r["con_documento"] == 8,
+       "tres quedan sin medir -sin documento, sin importe, y el asiento partido que no cuadra- y ocho tienen documento")
 
     # -- comparacion con el auditor
     comp = comparar_con_auditor_mum(ev, EVALUACION_AUDITOR, cols)

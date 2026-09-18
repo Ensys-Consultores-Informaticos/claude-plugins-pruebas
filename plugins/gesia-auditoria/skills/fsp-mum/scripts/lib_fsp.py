@@ -503,13 +503,29 @@ def _puntuar(fila: dict, cols: dict, fac: dict) -> dict:
     numero = tipo_num == "exacto"
     tercero = _mismo_tercero_doc(fila.get(cols.get("tercero")), fac) if cols.get("tercero") else False
     importe = None
+    por_asiento = None
     diferencia = None
+    # `importe_aplicable`, si el auditor lo declara, es la parte del documento que sostiene
+    # ESTE elemento: entra como candidato propio y NO pisa el total ni la base leidos, que se
+    # siguen citando tal cual en los mensajes.
+    candidatos = (("aplicable", parse_importe(fac.get("importe_aplicable"))),
+                  ("total", total), ("base", base), ("neto", _neto_factura(fac)))
     if imp is not None:
-        for etiqueta, valor in (("total", total), ("base", base), ("neto", _neto_factura(fac))):
+        for etiqueta, valor in candidatos:
             if valor is not None and abs(abs(imp) - abs(valor)) <= TOL_IMPORTE:
                 importe = etiqueta
                 break
-        if importe is None and total is not None:
+        # El elemento puede ser UNA LINEA de un asiento partido: entonces el documento no
+        # sostiene la linea, sostiene el asiento. La suma la trae la muestra del MCP
+        # (`ImporteAsiento`), sacada de la propia poblacion, no del diario.
+        if importe is None:
+            suma = parse_importe(fila.get("ImporteAsiento"))
+            if suma is not None:
+                for etiqueta, valor in candidatos:
+                    if valor is not None and abs(abs(suma) - abs(valor)) <= TOL_IMPORTE:
+                        por_asiento = etiqueta
+                        break
+        if importe is None and not por_asiento and total is not None:
             diferencia = round(abs(imp) - abs(total), 2)
     dias = None
     if f_fila and f_fac:
@@ -517,13 +533,14 @@ def _puntuar(fila: dict, cols: dict, fac: dict) -> dict:
     fecha = dias is not None and abs(dias) <= VENTANA_DIAS
     # El importe es la clave FUERTE (3); el tercero y el numero exacto, medias
     # (2); un numero que solo coincide por sufijo y la fecha, debiles (1).
-    puntos = ((3 if importe else 0) + (2 if tercero else 0)
+    puntos = ((3 if (importe or por_asiento) else 0) + (2 if tercero else 0)
               + (2 if numero else 1 if tipo_num == "sufijo" else 0) + (1 if fecha else 0))
     # Y con puntos no basta: hace falta una clave que ate el documento al apunte.
     # O el importe, o el numero exacto, o el tercero con la fecha. Sin eso, una
     # fecha y un sufijo de dos cifras 'localizaban' facturas ajenas.
-    ancla = bool(importe or numero or (tercero and fecha))
+    ancla = bool(importe or por_asiento or numero or (tercero and fecha))
     return {"numero": numero, "tipo_numero": tipo_num, "tercero": tercero, "importe": importe,
+            "por_asiento": por_asiento,
             "fecha": fecha, "dias": dias, "diferencia": diferencia, "ambiguo": False,
             "declarado": False,
             "puntos": puntos if ancla else 0, "num_fila": num_fila, "num_factura": num_fac}
@@ -723,8 +740,10 @@ def evaluar_fila(item: dict, cols: dict, atributos: list[dict], roles: dict[str,
                 resultados[aid] = ("Localizada solo por tercero y fecha, y había más de un candidato con la "
                                    f"misma coincidencia: confirma el documento ({fac.get('fichero')})")
                 continue
-            if c["importe"] or c["numero"]:
-                via = "número e importe" if (c["numero"] and c["importe"]) else ("importe" if c["importe"] else "número")
+            if c["importe"] or c["numero"] or c.get("por_asiento"):
+                via = ("número e importe" if (c["numero"] and c["importe"])
+                       else "importe" if c["importe"]
+                       else "número" if c["numero"] else "el importe del asiento completo")
                 resultados[aid] = f"Ok (localizada por {via}: {fac.get('fichero')})"
             elif c.get("tercero") and c["fecha"]:
                 resultados[aid] = (f"Localizada por tercero y fecha, pero el importe no coincide "
@@ -740,7 +759,16 @@ def evaluar_fila(item: dict, cols: dict, atributos: list[dict], roles: dict[str,
             # ingreso el apunte lleva la base y el IVA va a la 472/477. Medido en
             # la calibracion: los 18 elementos de compras casan por la base. La
             # hoja Muestra dice 'importe (base)' y con eso basta.
-            if c["importe"] is None and imp is not None and total is not None:
+            # El elemento puede ser UNA LINEA de un asiento partido: entonces el documento
+            # sostiene el asiento, no la linea, y decir que el importe no corresponde es un
+            # hallazgo FALSO. Medido el 17/09/2026: 6 de cada 10 filas de aquella poblacion
+            # viven en un asiento partido.
+            if c["importe"] is None and not c.get("por_asiento") and fila.get("LineasAsiento"):
+                partes.append(f"Asiento partido en {fila.get('LineasAsiento')} líneas "
+                              f"(elementos {fila.get('IdsAsiento')}) que suman "
+                              f"{_fmt(parse_importe(fila.get('ImporteAsiento')))}, y no casan con el "
+                              f"documento: lo decide el auditor")
+            elif c["importe"] is None and not c.get("por_asiento") and imp is not None and total is not None:
                 partes.append(f"Importe en factura ({_fmt(abs(total))}) no corresponde con importe "
                               f"en libros ({_fmt(abs(imp))}): diferencia {_fmt(c['diferencia'])}")
             if c["dias"] is not None and abs(c["dias"]) > VENTANA_DIAS:
@@ -750,6 +778,9 @@ def evaluar_fila(item: dict, cols: dict, atributos: list[dict], roles: dict[str,
                 partes.append("Sin fecha legible en la factura para contrastar")
             if partes:
                 resultados[aid] = " · ".join(partes)
+            elif c.get("por_asiento"):
+                resultados[aid] = (f"Ok (el documento soporta el asiento entero, "
+                                   f"{fila.get('LineasAsiento')} líneas: elementos {fila.get('IdsAsiento')})")
             elif c.get("importe") == "neto":
                 resultados[aid] = ("Ok (el importe en libros casa con el neto a pagar, "
                                    "tras la retención de IRPF)")

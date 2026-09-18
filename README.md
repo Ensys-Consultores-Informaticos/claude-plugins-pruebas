@@ -29,6 +29,21 @@ transcribe el sello en `token` y el cruce lo usa en vez del nombre. Qué probar:
 «tachadas» de punta a punta —que las imágenes que suben no lleven el nombre del emisor, que el papel salga
 igual que en claro (la calibración era 42/42 y 18/18), y qué tarda (unos 4 s por factura en el equipo)—; y
 otra con «tal cual», que el token en la esquina no estorbe. `fsp-cumplimiento` todavía no pregunta.
+**1.13.9 (18/09/2026), del registro de una MUM de compras: la anonimización protegía la columna equivocada.**
+En esa población, el rótulo de las columnas mentía dos veces: la que se llamaba «NOMBRE» era la **descripción de la
+cuenta de gasto** (9 valores para 766 filas, uno por cuenta) y la que se llamaba «TERCERO» valía lo mismo en las 766;
+el proveedor estaba en otra. Así que se tokenizaba lo que no hacía falta y **la razón social del proveedor salía en
+claro**. Ahora la columna se elige mirando el dato, no el rótulo, y —lo que de verdad cierra el agujero— **se
+tokenizan todas las columnas de nombre, no solo la elegida**: elegir mal vuelve a ser un problema de cruce, que se
+arregla reexportando, y no una fuga. Medido sobre esa población: razones sociales en claro, **606 → 0**.
+Y lo segundo, que valía un error falso proyectado a 766 elementos: **un elemento puede ser UNA LÍNEA de un asiento
+partido**. El 60 % de las filas de esa población vivía en un asiento de más de una línea, así que la factura no casa
+con la línea seleccionada y el elemento salía como «documento no localizado». Ahora la muestra trae cuántas líneas
+tiene su asiento y cuánto suman —calculado sobre la propia población, sin necesitar el diario— y el cruce prueba
+también esa suma: si el documento la sostiene, el elemento está **medido con error 0**. Si no la sostiene, **no se
+propone nada** y la observación dice dónde están las líneas del asiento, para que lo mires tú. Además, `configurar`
+rechaza un fichero que no sea `.smn` como diario en vez de fallar después con un error del driver. Qué probar: una
+MUM o un cumplimiento de compras, mirando que el tercero del papel sea el proveedor y no la cuenta.
 **1.13.8 (17/09/2026): el número de factura ya no se va en negro.** Dos piezas. La primera, decidida sobre la
 medida anterior: el skill le pasa al MCP **los números de documento que la muestra ya trae**, y el tachado los
 conserva **por igualdad**, dondequiera que estén, en vez de intentar adivinar qué parece un número. No expone

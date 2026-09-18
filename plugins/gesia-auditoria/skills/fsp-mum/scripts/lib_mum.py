@@ -36,9 +36,18 @@ NOMBRE_TERMINO = {"total": "el total de la factura",
 
 
 def _valor(fac: dict, termino: str) -> float | None:
-    """El importe del documento según con qué se compare."""
+    """El importe del documento según con qué se compare.
+
+    `importe_aplicable` manda sobre todo lo demás: es la parte del documento que sostiene ESTE
+    elemento, declarada a mano cuando el reparto no se puede deducir (el documento cubre varios
+    asientos, hay una entrega parcial, o parte del gasto cae fuera de la población). No falsea
+    la lectura: la base y el total siguen siendo los que pone la factura.
+    """
     if fac is None:
         return None
+    apl = parse_importe(fac.get("importe_aplicable"))
+    if apl is not None:
+        return apl
     if termino == "total":
         return parse_importe(fac.get("total"))
     if termino == "base":
@@ -118,12 +127,34 @@ def evaluar_mum(cruce: dict, cols: dict) -> list[dict]:
         elif fac is None:
             nota = ("Documento no localizado en la carpeta: sin él no se puede fijar el importe "
                     "según auditoría")
+        elif parse_importe(fac.get("importe_aplicable")) is not None:
+            # lo declarado a mano manda: se mide contra esa parte, y se dice en la observacion
+            usado = termino or "total"
+            saldo_aud = _valor(fac, usado)
+            saldo_aud = saldo_aud if saldo >= 0 else -saldo_aud
+            error = round(saldo - saldo_aud, 2)
+            tasa = round(error / saldo * 100.0, 2) if saldo else None
+            nota = "importe aplicable declarado a mano en facturas.json"
         elif c["importe"] in TERMINOS:
             # Casa: el documento sostiene el saldo contabilizado, no hay error.
             usado = c["importe"]
             saldo_aud = saldo
             error = 0.0
             tasa = 0.0
+        elif c.get("por_asiento") in TERMINOS:
+            # El documento sostiene el ASIENTO ENTERO, del que este elemento es una linea. El
+            # gasto esta completo: el elemento esta medido y su error es 0.
+            usado = c["por_asiento"]
+            saldo_aud = saldo
+            error = 0.0
+            tasa = 0.0
+            nota = _nota_asiento(fila, "cuadra")
+        elif fila.get("LineasAsiento"):
+            # Asiento partido cuyo documento NO sostiene ni la linea ni la suma. Aqui NO se
+            # propone nada (David, 18/09/2026): proponer el importe del documento declara un
+            # error igual a la otra linea del asiento, y ese error se proyecta a la poblacion
+            # entera. La observacion dice donde estan las lineas para que el auditor mire.
+            nota = _nota_asiento(fila, "no cuadra")
         elif not termino:
             nota = ("sin criterio de comparación claro (total, base o neto): lo decide "
                     "el auditor")
@@ -144,6 +175,20 @@ def evaluar_mum(cruce: dict, cols: dict) -> list[dict]:
         salida.append({**it, "saldo": saldo, "repeticiones": reps, "termino": usado,
                        "saldo_auditoria": saldo_aud, "error": error, "tasa": tasa, "nota": nota})
     return salida
+
+
+def _nota_asiento(fila: dict, caso: str) -> str:
+    """Donde estan las lineas del asiento, para el auditor. Sin cifras que no tenga ya."""
+    n = fila.get("LineasAsiento")
+    suma = _fmt(parse_importe(fila.get("ImporteAsiento")))
+    ids = str(fila.get("IdsAsiento") or "").strip()
+    donde = f" (elementos {ids})" if ids else ""
+    if caso == "cuadra":
+        # la suma no se repite: es la del documento, que ya esta en el papel
+        return f"el documento soporta el asiento entero, {n} líneas{donde}"
+    # aqui la suma SI se dice: es el dato nuevo, no esta en ninguna columna
+    return (f"ATENCIÓN, asiento partido: {n} líneas{donde} suman {suma} y no casan con el "
+            f"documento. Sin propuesta")
 
 
 def _may(t: str) -> str:

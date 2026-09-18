@@ -41,6 +41,7 @@ from lib_fsp import (
     cruzar,
     detectar_columnas,
     evaluar,
+    evaluar_fila,
     normalizar_numero,
     numero_en_texto,
     observacion,
@@ -140,6 +141,31 @@ def main() -> int:
     ok(roles["2"] == ROL_CONTABILIZACION, "11 CONTABILIZACION -> contabilizacion")
     ok(roles["4"] == ROL_AUDITOR, "02 AUTORIZACION -> auditor")
     ok(roles["1"] == ROL_AUDITOR, "05 REGISTRO (oportunidad) -> auditor")
+
+    # -- el asiento partido: el elemento es UNA LINEA y el documento sostiene el asiento
+    # (lo adjunta el MCP a la muestra desde la propia poblacion, no del diario)
+    _part = [
+        {"60_ID": "20", "Seleccionado": "True", "Repeticiones": "1", "Fecha": "04/12/25 0:00:00",
+         "CuentaContable": "60000001", "DescripcinApunte": "EPSILON", "Saldo": "8000", "Documento": "E-55",
+         "LineasAsiento": 2, "ImporteAsiento": 12100.0, "IdsAsiento": "20, 21"},
+        {"60_ID": "22", "Seleccionado": "True", "Repeticiones": "1", "Fecha": "09/12/25 0:00:00",
+         "CuentaContable": "60000001", "DescripcinApunte": "ZETA", "Saldo": "8400", "Documento": "Z-90",
+         "LineasAsiento": 2, "ImporteAsiento": 10500.0, "IdsAsiento": "22, 23"},
+    ]
+    _fac_part = [
+        {"fichero": "20 - EPSILON E-55.pdf", "proveedor": "EPSILON", "numero": "E-55",
+         "fecha": "04/12/2025", "base": "10000,00", "iva": "2100,00", "total": "12100,00"},
+        {"fichero": "22 - ZETA Z-90.pdf", "proveedor": "ZETA", "numero": "Z-90",
+         "fecha": "09/12/2025", "base": "9800,00", "iva": "2058,00", "total": "11858,00"},
+    ]
+    _cols_p = detectar_columnas(_part[0])[0]
+    _cp = cruzar(_part, _fac_part, _cols_p)
+    _ep = {e["fila"]["60_ID"]: evaluar_fila(e, _cols_p, ATRIBUTOS, roles) for e in _cp["filas"]}
+    ok("asiento entero" in _ep["20"]["2"] and _ep["20"]["2"].startswith("Ok"),
+       "asiento partido cuya SUMA sostiene el documento: la contabilizacion es Ok, no un hallazgo de importe")
+    ok("no corresponde" not in _ep["22"]["2"] and "lo decide el auditor" in _ep["22"]["2"]
+       and "22, 23" in _ep["22"]["2"],
+       "y si no cuadra, no se afirma que el importe no corresponde: se dice donde estan las lineas y decide el auditor")
 
     # -- cruce
     cruce = cruzar(MUESTRA, FACTURAS, cols)

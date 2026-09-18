@@ -21,7 +21,7 @@ description: >
   expediente con cliente de muestreo vinculado (o el .cli directamente), y la
   carpeta con los documentos escaneados.
 ---
-_Versión del skill: 17/09/2026 · plugin interno 1.42.0 · pide MCP ≥ 1.14.5._
+_Versión del skill: 18/09/2026 · plugin interno 1.45.0 · pide MCP ≥ 1.15.0._
 
 
 # Prueba de cumplimiento de ForSampling (fsp-cumplimiento)
@@ -132,8 +132,13 @@ lo dice en `diario`. Pregúntaselo al auditor con esta frase, tal cual: *«Neces
 contrapartida de cada elemento para tokenizar al tercero; la saco del diario directamente si me
 indicas dónde está —el .smn que importó ForSampling, normalmente en `Muestreo\SesionesImportacion`—»*.
 Pásala con `configurar(smn_file = "<ruta>")`. Si no lo tiene o no lo sabe, **sigue**: la muestra
-saldrá con tokens de reserva (`TER h…`) y el papel lo hace constar. Con un `.gs3` activo no hay
-nada que preguntar: el diario es el del expediente.
+saldrá con tokens de reserva (`TER h…`) y el papel lo hace constar.
+
+Con un `.gs3` activo el diario es el del expediente y no hay nada que preguntar, **salvo que el
+expediente no tenga ninguno importado**: si `configurar()` dice «el expediente no tiene ningún
+diario importado», pregunta exactamente lo mismo que para un `.cli` y sigue igual si no aparece.
+Y si el auditor ofrece un fichero que no es un `.smn` —un Excel de la contabilidad, por ejemplo—,
+el MCP lo rechaza sin tocar el estado: no insistas ni intentes convertirlo.
 
 Si el fichero activo es un `.gs3`, `configurar` deduce solo el `.cli` del cliente de
 muestreo (`cli_file`). Si dice «sin cliente de muestreo vinculado», el encargo no
@@ -383,6 +388,35 @@ mano** añadiendo `poblacion_id` a esa entrada de `facturas.json` con el id del 
 Con eso el documento se asigna a ese elemento sin pasar por la puntuación, y el papel hace
 constar que el vínculo lo puso el auditor.
 
+**El elemento puede ser UNA LÍNEA de un asiento partido.** ForSampling selecciona líneas; la
+factura sostiene el asiento. Cuando el asiento reparte la base en varias líneas, la muestra coge
+una y la factura no casa con ella. **No es raro**: medido en una población de compras el
+17/09/2026, el 60 % de las filas vivía en un asiento de más de una línea.
+
+No hay que hacer nada para que funcione: cuando el asiento del elemento está partido, la muestra
+trae `LineasAsiento`, `ImporteAsiento` e `IdsAsiento` —los calcula el MCP sobre la propia
+población, no sobre el diario— y el cruce prueba también esa suma. Lo que sí hay que saber al leer
+el resultado:
+
+| Lo que sale | Qué significa |
+|---|---|
+| Casa la suma del asiento | el gasto está entero, repartido en varias líneas: el elemento está **medido y su error es 0**, y la observación dice cuáles son las otras líneas |
+| No casa ni la línea ni la suma | **no se propone importe ni error**, a propósito: proponer el del documento declararía un error igual a la otra línea del asiento, y ese error se proyectaría a toda la población. La observación dice dónde están las líneas y cuánto suman, para que el auditor investigue por qué no cuadran |
+
+Si la población está acotada por cuenta y parte del gasto del asiento cae fuera, la suma se queda
+corta y cae en el segundo caso. Es correcto, y la pista está en la observación.
+
+**Cuando el reparto no se puede deducir** —un documento que cubre varios asientos, una entrega
+parcial, un gasto que en parte cae fuera de la población—, añade `importe_aplicable` junto a
+`poblacion_id` con la parte del documento que sostiene ese elemento:
+
+```json
+{"fichero": "…", "poblacion_id": "301", "importe_aplicable": "8400,00", "base": "10000,00", "…": ""}
+```
+
+No falsea la lectura —`base` y `total` siguen siendo los que pone la factura— y la observación hace
+constar que va declarado a mano. Es la excepción: el caso corriente lo resuelve solo la suma.
+
 **Y si la observación dice «ATENCIÓN: asignado solo por tercero y fecha, y había más de un
 candidato»**, confírmalo antes de entregar: hay dos documentos del mismo tercero que encajan
 igual de bien y el skill no puede saber cuál va con cuál. Se resuelve igual, con
@@ -550,6 +584,7 @@ porque el papel ya no lo lleva escrito.
 | Una columna de tercero que vale lo mismo en todas las filas | el skill cambia de columna solo, y lo avisa (A00) |
 | Dos documentos del mismo tercero encajan igual en un elemento | sigue: gana el de fecha más cercana; si empatan, el atributo de documento lo dice y pide confirmación |
 | Los documentos sobrantes son justo los ficheros de la carpeta SIN prefijo numérico | sigue: la carpeta tiene más documentos de los que pide la muestra. No es extravío ni diferencia |
+| Un elemento cuyo asiento está partido y cuya suma no casa con el documento | sigue: queda **sin propuesta** y la observación lleva a las líneas del asiento |
 | Un elemento sin documento y un documento sobrante del mismo tercero | sigue, y el script lo señala como POSIBLE DIFERENCIA: se ata con `poblacion_id` |
 | Fichero activo `.cli` y el auditor no sabe dónde está el diario | sigue: la muestra sale con tokens de reserva `TER h…`, el cruce va sin tercero, y el papel lo dice |
 | El `.smn` indicado no es el de la población (sus asientos no existen en él) | **para** en el paso 2 con «ese diario no es el de esta población»: se pide una vez, no se busca otro |
