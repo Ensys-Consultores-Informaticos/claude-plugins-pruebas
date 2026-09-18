@@ -437,10 +437,16 @@ def main() -> int:
             json.dumps(man, ensure_ascii=False, indent=1), encoding="utf-8")
         print(f"Renderizada la página 1 de cada documento a {PPP} ppp ({ANCHO_A4} px de ancho) "
               f"en {pag}")
-        varias = [d for d in man["documentos"] if d["paginas"] > 1]
+        varias = [d for d in man["documentos"] if d["paginas"] > len(d.get("imagenes") or [1])]
         if varias:
-            print(f"{len(varias)} documento(s) tienen más de una página. Si en la primera no "
-                  f"están los totales, pide la última con --ampliar «<fichero>».")
+            print(f"[A] {len(varias)} documento(s) tienen páginas SIN VER "
+                  f"({sum(d['paginas'] - len(d.get('imagenes') or [1]) for d in varias)} en total):")
+            for d in varias:
+                print(f"      {d['id']}  {d['paginas']}p, vistas {len(d.get('imagenes') or [1])}  {d['fichero']}")
+            print("    Un escaneo de archivo mete varias facturas, albaranes y guías en el mismo PDF: "
+                  "esas páginas pueden traer OTRO documento, no líneas de detalle. Pide las que hagan "
+                  "falta con --ampliar «<fichero>» --pagina N. Obligatorio mirarlas antes de dar por "
+                  "buena una diferencia de importe o un total ilegible.")
 
     if a.ampliar:
         man = _leer_manifiesto(trabajo)

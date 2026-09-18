@@ -21,7 +21,7 @@ description: >
   expediente con cliente de muestreo vinculado (o el .cli directamente), y la
   carpeta con los documentos escaneados.
 ---
-_Versión del skill: 18/09/2026 · plugin interno 1.45.0 · pide MCP ≥ 1.15.0._
+_Versión del skill: 18/09/2026 · plugin interno 1.46.0 · pide MCP ≥ 1.17.0._
 
 
 # Prueba de cumplimiento de ForSampling (fsp-cumplimiento)
@@ -103,10 +103,18 @@ configurar(perfil = "fsp-cumplimiento")   # primero: el tercero de la muestra, t
 contexto_expediente()
 ```
 
-Si la primera llamada al MCP falla con **«Connection closed»** o **«Server … unavailable»**,
-**reintenta hasta tres veces** antes de decir nada: el conector tarda unos segundos en
-arrancar y la primera petición puede llegar antes. Si a la tercera sigue igual, entonces sí:
-pídele que reinicie Claude del todo.
+Si la primera llamada al MCP falla con **«Connection closed»**, **«Server … unavailable»** o
+**«did not respond within 60s»**, **reintenta hasta tres veces, esperando entre intentos**: el
+conector tarda unos segundos en arrancar y la primera petición puede llegar antes. Reintentar
+seguido no basta —medido el 18/09/2026: los tres intentos fallaron y lo que funcionó fue esperar
+alrededor de un minuto—. Si después sigue igual, pídele que reinicie Claude del todo.
+
+**Y en cuanto vuelva, antes de cualquier otra cosa, repite `configurar()` con el expediente Y el
+perfil.** Un reinicio del servidor borra el estado, y el MCP vuelve sin expediente y **sin
+perfil**: si sigues sin reconfigurar, la muestra sale con **los nombres de los terceros en claro**.
+El MCP lo avisa en la propia respuesta cuando detecta que hay columnas de nombre sin tokenizar
+—«⚠ NOMBRES EN CLARO»—; si ves ese aviso, no sigas con esas filas: reconfigura y vuelve a
+exportar.
 
 **Lo primero, antes de leer nada: `configurar(perfil = "fsp-cumplimiento")`.** Con el perfil, la
 muestra que exporta el MCP lleva el tercero de cada elemento como **token** —`PROV 40000012`,
@@ -244,6 +252,10 @@ pregunta con opciones y no como texto:
 > subir; el modelo lee importes, fechas y número, y en vez del nombre ve el mismo código que en
 > la muestra. **(2) Tal cual** — la factura sube completa, con el nombre del emisor, y puedes
 > pedirme que revise su contenido; el código del emisor va en una esquina.*
+>
+> *Con «tachadas», en algunos documentos el número o la fecha pueden quedar ilegibles —van
+> pegados a la cabecera, o el escaneo es pobre—. Eso sale como aviso del contrato, no como
+> incidencia de la prueba, y te lo diré distinguiéndolo.*
 
 Es su decisión y hay que hacerla sabiendo lo que implica; no la tomes tú ni la des por hecha de
 una sesión a otra. **Con el perfil puesto, en los dos casos las imágenes las hace el MCP** en el
@@ -330,9 +342,28 @@ junta los lotes en `facturas.json` y te dice si falta algún documento del inven
 algún lector se inventó uno. Con todo transcrito, sigue en el paso siguiente. **Solo si tu
 entorno no tiene subagentes**, lee las imágenes tú, como sigue.
 
-**Lee las imágenes que te ha dejado**, no los PDF. Si en la primera página no están los
-totales —hay facturas donde la página 1 dice «SEGUE» y el total está en la siguiente—, pide
-la que falte y no des ningún total por leído hasta verlo escrito como total:
+**Antes de dar por buena ninguna lectura, mira el aviso de páginas sin ver.** `preparar_facturas`
+devuelve `paginas_sin_ver` —por id de documento— y el inventario lo imprime con `[A]`. Sólo se
+renderiza la primera página de cada documento (y la última cuando la primera no sostiene un
+total), y eso da por supuesto que lo de en medio es detalle. **En un escaneo de archivo es falso**:
+en el mismo PDF conviven la factura, su albarán, la guía de transporte y a veces **otra factura**.
+El 18/09/2026 el hallazgo que daba sentido a la prueba estaba en la página 2 de un PDF de 5 —otra
+factura del mismo emisor, cuyo importe explicaba la diferencia— y la lectura por defecto concluyó
+que no existía.
+
+Regla dura: **importe que no casa con libros + documento con páginas sin ver ⇒ pide esas páginas
+antes de declarar ninguna diferencia.** Se piden con
+`preparar_facturas(..., documentos=["<fichero>"], paginas=[2,3])`.
+
+**Lee las imágenes que te ha dejado**, no los PDF. Si en la primera página no están los totales,
+pide la que falte y no des ningún total por leído hasta verlo escrito como total. Son **dos**
+casos distintos y los dos cuentan:
+
+- la página lo anuncia —«SEGUE», «Suma y sigue», «continúa»— y el total está en la siguiente;
+- **las casillas de totales están, pero vacías.** No es un escaneo malo ni un tachado: es una
+  factura cuyos totales van en la página 2. Si ves las casillas y no ves cifra dentro, deja base
+  y total vacíos y **pide la página siguiente** antes de concluir nada (medido el 18/09/2026:
+  pasó y hubo que resolverlo mirando las imágenes a mano).
 
 ```bash
 python "$SKILL/scripts/preparar_documentos.py" --trabajo "$DATOS" --ampliar "<fichero>"
@@ -528,6 +559,14 @@ exportadas y, desde el MCP 1.14.3, **también las imágenes y el `manifiesto.jso
 `preparar_facturas` dejó en `_tmp_cowork\facturas`** (con un MCP anterior quedan ahí: dilo al
 auditor con la ruta, que en Cowork no tienes shell en su equipo). `facturas.json` y `roles.json`
 los escribiste tú: bórralos con el directorio de trabajo. Los PDF no se copian a ningún sitio.
+
+**No te fíes del recuento.** Desde el MCP 1.17.0 la respuesta puede traer `revisa_estos_ficheros`
+y un `aviso`: son ficheros que quedan en las carpetas donde el MCP ha exportado y que la
+herramienta **no** ha escrito, así que no los borra. Si alguno es una exportación de esta sesión
+—una muestra, una evaluación— lleva contabilidad del cliente, y esas carpetas suelen estar
+sincronizadas con la nube. **Enséñale la lista al auditor con la ruta y pídele que los borre**;
+no la escondas porque el recuento diga que se han borrado muchos. El 18/09/2026 la herramienta
+dijo «45 borrados» y quedaron dos exportaciones con datos del cliente dentro de OneDrive.
 
 ---
 

@@ -29,6 +29,21 @@ transcribe el sello en `token` y el cruce lo usa en vez del nombre. Qué probar:
 «tachadas» de punta a punta —que las imágenes que suben no lleven el nombre del emisor, que el papel salga
 igual que en claro (la calibración era 42/42 y 18/18), y qué tarda (unos 4 s por factura en el equipo)—; y
 otra con «tal cual», que el token en la esquina no estorbe. `fsp-cumplimiento` todavía no pregunta.
+**1.13.10 (18/09/2026): el servidor se levanta solo, y lo que antes se callaba ahora se dice.**
+Lleva dos versiones del MCP. La **1.16.0** añade `arrancar_api`: cuando el servidor API no está sirviendo,
+el MCP lo levanta él —deduce la ruta del conector del registro de Windows— en vez de pedirte que lo lances a
+mano. Y la **1.17.0**, del registro de una prueba de cumplimiento, arregla tres silencios:
+· **Páginas que nadie miraba.** Sólo se renderiza la primera página de cada documento, dando por supuesto que
+lo de en medio son líneas de detalle. En un escaneo de archivo eso es falso: en el mismo PDF conviven la
+factura, su albarán y a veces **otra factura**. Ese día el hallazgo que daba sentido a la prueba estaba en la
+página 2 de un PDF de 5, y la lectura por defecto concluyó que no existía. Ahora el inventario avisa de qué
+documentos tienen páginas sin ver, y el skill tiene prohibido declarar una diferencia sin mirarlas.
+· **Sin perfil no se anonimiza, y no se avisaba.** Tras una caída del conector el servidor vuelve sin perfil, y
+una muestra sin tokenizar se ve igual que una tokenizada salvo por los nombres: se podía seguir trabajando con
+los terceros en claro sin enterarse. Ahora la respuesta lo dice, y el skill sabe que tiene que reconfigurar.
+· **La limpieza decía «45 borrados» y quedaban dos exportaciones** con contabilidad del cliente en una carpeta
+de OneDrive. Ahora enumera lo que queda en esas carpetas sin haberlo escrito ella, en vez de dar por hecho que
+ha terminado. Qué probar: un cumplimiento con documentos de varias páginas, mirando el aviso del inventario.
 **1.13.9 (18/09/2026), del registro de una MUM de compras: la anonimización protegía la columna equivocada.**
 En esa población, el rótulo de las columnas mentía dos veces: la que se llamaba «NOMBRE» era la **descripción de la
 cuenta de gasto** (9 valores para 766 filas, uno por cuenta) y la que se llamaba «TERCERO» valía lo mismo en las 766;
