@@ -21,7 +21,7 @@ description: >
   expediente con cliente de muestreo vinculado (o el .cli directamente), y la
   carpeta con los documentos escaneados.
 ---
-_Versión del skill: 18/09/2026 · plugin interno 1.50.0 · pide MCP ≥ 1.19.0._
+_Versión del skill: 18/09/2026 · plugin interno 1.51.0 · pide MCP ≥ 1.19.1._
 
 
 # Prueba de cumplimiento de ForSampling (fsp-cumplimiento)
@@ -134,19 +134,25 @@ las dos va estampado el token del emisor, así que el cruce conserva el tercero.
 prefiere que tampoco la muestra viaje anonimizada, el interruptor es suyo:
 `configurar(nombres = "claro")`.
 
-**El diario, cuando el fichero activo es un `.cli`.** El `.cli` no vincula diario, y el MCP
-necesita el diario del que salió la población para encontrar la contrapartida. `configurar()`
-lo dice en `diario`. Pregúntaselo al auditor con esta frase, tal cual: *«Necesito la
-contrapartida de cada elemento para tokenizar al tercero; la saco del diario directamente si me
-indicas dónde está —el .smn que importó ForSampling, normalmente en `Muestreo\SesionesImportacion`—»*.
-Pásala con `configurar(smn_file = "<ruta>")`. Si no lo tiene o no lo sabe, **sigue**: la muestra
-saldrá con tokens de reserva (`TER h…`) y el papel lo hace constar.
+**El diario: no lo pidas antes de saber si hace falta.** El MCP necesita la contrapartida de
+cada elemento para tokenizar al tercero, pero **muchas poblaciones ya la traen** en una columna
+propia (`CONTRAPFINAL` junto a `NOMBRECONTRAP`), y entonces el diario sobra. Así que **exporta
+primero** y mira lo que dice `muestra_tokenizada`:
 
-Con un `.gs3` activo el diario es el del expediente y no hay nada que preguntar, **salvo que el
-expediente no tenga ninguno importado**: si `configurar()` dice «el expediente no tiene ningún
-diario importado», pregunta exactamente lo mismo que para un `.cli` y sigue igual si no aparece.
-Y si el auditor ofrece un fichero que no es un `.smn` —un Excel de la contabilidad, por ejemplo—,
-el MCP lo rechaza sin tocar el estado: no insistas ni intentes convertirlo.
+- «*N por la contrapartida que trae la propia población*» → **no preguntes nada**, ya está.
+- «*N con token de reserva (TER h…)*» o `SIN DIARIO` → ahí sí falta, y entonces preguntas.
+
+La frase, cuando toque: *«Necesito la contrapartida de cada elemento para tokenizar al tercero;
+la saco del diario si me indicas dónde está el .smn del ejercicio completo»*. Y avísale de que
+**no vale cualquier `.smn`**: la carpeta `Muestreo\SesionesImportacion` suele estar llena de
+poblaciones de pruebas concretas —medido: 55, 121 y 121 ficheros en tres expedientes— que se
+llaman parecido y no son el diario. El tamaño tampoco los distingue. Si no sabe cuál es, que
+busque el del ejercicio completo, que puede estar en otra carpeta de contabilidad.
+
+Pásalo con `configurar(smn_file = "<ruta>")`. Si no lo tiene o no lo sabe, **sigue**: la muestra
+saldrá con tokens de reserva y el papel lo hace constar. Y si ofrece algo que no es un `.smn`
+—un Excel de la contabilidad—, el MCP lo rechaza sin tocar el estado: no insistas ni intentes
+convertirlo.
 
 Si el fichero activo es un `.gs3`, `configurar` deduce solo el `.cli` del cliente de
 muestreo (`cli_file`). Si dice «sin cliente de muestreo vinculado», el encargo no
@@ -325,7 +331,13 @@ python "$SKILL/scripts/preparar_documentos.py" --trabajo "$DATOS" --lotes 10
 ```
 
 Escribe `lotes.json` y te imprime cada lote con sus imágenes y la ruta donde ese lector
-tiene que dejar su resultado (`facturas_lote_N.json`). Lanza **un agente por lote, todos en
+tiene que dejar su resultado (`facturas_lote_N.json`).
+
+**Si el modo es «tachadas», díselo al lector en su encargo, con esas palabras: «el lote va
+tachado».** Es lo único que él no puede saber mirando las imágenes, y cambia lo que escribe: con
+esa frase deja `proveedor` y `cif` vacíos aunque en alguna imagen el nombre se lea —pasa con los
+documentos que no casaron con ningún tercero— y lo hace constar en `notas`. Sin esa frase los
+transcribe, que es lo correcto en modo «tal cual» y una fuga en modo «tachadas». Lanza **un agente por lote, todos en
 la misma tanda**, hasta cuatro a la vez; a cada uno le pasas en el prompt **el nombre de la entidad
 auditada** (el de `contexto_expediente`), la lista de sus documentos con las imágenes y la
 ruta de salida, y nada más: ni la muestra, ni los importes de libros. El nombre de la entidad

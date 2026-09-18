@@ -38,6 +38,11 @@ Una entrada por fichero, con exactamente estas claves:
   auditor ha puesto al tachar la factura, y sustituye al nombre: si la factura viene tachada,
   `proveedor` y `cif` quedan vacíos y el `token` es lo que ata el documento a su apunte. **No lo
   confundas con el número de factura** ni lo copies en `numero`. Sin sello, vacío.
+- **Si quien te lanza dice que el lote va TACHADO, `proveedor` y `cif` van vacíos SIEMPRE**, aunque
+  en alguna imagen el nombre se lea perfectamente. Que se lea significa que el tachado no
+  reconoció a ese emisor, no que puedas copiarlo: escribe en `notas` «emisor legible, sin sello» y
+  sigue. No aporta nada al cruce —con la muestra tokenizada, un nombre en claro no casa con ningún
+  apunte— y reparte un dato que no tiene por qué salir de la imagen.
 - Importes **como los imprime el documento**, con coma decimal y sin símbolo: `12500,00`.
 - `numero` **tal como lo escribe el proveedor**, con su serie, barras y guiones: `FA25/00042`,
   `B/17`, `PF-2025000777`. No lo normalices: eso lo hace el cruce.

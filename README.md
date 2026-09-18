@@ -29,6 +29,17 @@ transcribe el sello en `token` y el cruce lo usa en vez del nombre. Qué probar:
 «tachadas» de punta a punta —que las imágenes que suben no lleven el nombre del emisor, que el papel salga
 igual que en claro (la calibración era 42/42 y 18/18), y qué tarda (unos 4 s por factura en el equipo)—; y
 otra con «tal cual», que el token en la esquina no estorbe. `fsp-cumplimiento` todavía no pregunta.
+**1.13.15 (18/09/2026): el lector no copia el nombre que el tachado no pudo tapar.**
+Cuando el tachado no reconoce al emisor de un documento, ese documento sube con el nombre a la vista —te lo avisa
+antes—. Lo que pasaba después es que el lector, haciendo su trabajo, transcribía esa razón social al fichero de
+lectura, y de ahí se reparte: se vuelca, se inspecciona, acaba en la columna de tercero del papel. No aportaba nada
+—con la muestra anonimizada el cruce compara códigos, no nombres— así que ahora, si el lote va tachado, el lector
+deja el nombre vacío aunque lo lea y lo hace constar en sus notas.
+Y **el diario ya no se pide por costumbre**: desde la versión anterior el código del proveedor sale de la propia
+población, así que primero se exporta y solo se pregunta si de verdad falta. Medido en 7 expedientes antes de
+escribir la recomendación que pedía el registro: la carpeta que allí funcionó solo tiene el diario en uno de los
+siete, así que no se generaliza; lo que sí se repite es que `SesionesImportacion` guarda decenas de ficheros que se
+llaman igual y no son el diario.
 **1.13.14 (18/09/2026): el código del proveedor sale de la población, no del diario.**
 En la prueba en frío anterior, 10 de 14 documentos subieron sin tapar el nombre del emisor. El aviso nuevo lo dijo,
 pero había que arreglarlo. La causa: la muestra trae **nueve** proveedores distintos, y al buscar su código en el
