@@ -21,7 +21,7 @@ description: >
   arrancado, el expediente con cliente de muestreo vinculado (o el .cli
   directamente), y la carpeta con los documentos escaneados.
 ---
-_Versión del skill: 18/09/2026 · plugin interno 1.49.0 · pide MCP ≥ 1.18.0._
+_Versión del skill: 18/09/2026 · plugin interno 1.50.0 · pide MCP ≥ 1.19.0._
 
 
 # Prueba MUM de ForSampling (fsp-mum)
@@ -276,8 +276,8 @@ La respuesta trae **`ficheros`**, la lista de las imágenes generadas: úsala pa
 listar la carpeta ni escribir las rutas a mano.
 
 Deja en `destino` un JPEG por página a 100 ppp y un `manifiesto.json` que
-`preparar_documentos.py` lee tal cual: **sube esa carpeta dentro del mismo `$DATOS` del paso 2**
-(en Cowork, `device_stage_files` sobre `_tmp_cowork\facturas`; queda como `$DATOS/facturas/`).
+`preparar_documentos.py` lee tal cual: **sube esa carpeta dentro del mismo `$DATOS` del paso 2**<!-- solo-cowork -->
+(en Cowork, `device_stage_files` sobre `_tmp_cowork\facturas`; queda como `$DATOS/facturas/`)<!-- /solo-cowork -->.
 **No es otro `$DATOS`**: `muestra.json`, `parametros.json` y `facturas/` conviven en el mismo
 directorio, y el script encuentra el manifiesto en esa subcarpeta solo (con scripts anteriores
 al 16/09/2026 había que copiarlo a la raíz a mano: ya no). Los pasos siguientes —`--lotes`,
@@ -517,8 +517,8 @@ Si había evaluación del auditor, traslada las cifras de la comparación. La qu
 
 **Los nombres.** El papel se ha escrito con tokens en las columnas de la muestra (la columna del
 documento leído, `Proveedores`, lleva lo que decía la factura). Cuando ya esté en el disco del
-auditor —en Cowork, después de bajarlo al expediente con `device_commit_files`; en local,
-directamente—, llama a `rehidratar(ruta = "<expediente>/InformesGesia/FspMum/<fichero>",
+auditor<!-- solo-cowork --> —en Cowork, después de bajarlo al expediente con
+`device_commit_files`; en local, directamente—<!-- /solo-cowork -->, llama a `rehidratar(ruta = "<expediente>/InformesGesia/FspMum/<fichero>",
 leyenda = true)`: sustituye cada token por el nombre real, en local, y devuelve recuentos —ni un
 nombre vuelve aquí—. Con `leyenda = true` añade la hoja «Tokens» con la equivalencia, para que
 lo que has dicho en el chat con tokens se pueda leer en el papel. **Cuéntale al auditor los dos
@@ -541,8 +541,8 @@ cifrado, y es lo que permite rehidratar un papel de hace días.
 si la prueba pasa. Nada de eso sale de este papel.
 
 **Los temporales.** `parametros.json` lo escribiste tú desde la respuesta de `obtener_entidad`, así que `limpiar_exportaciones()` **no lo borra**: bórralo aparte, y en una carpeta conectada puede pedir permiso de borrado. `limpiar_exportaciones()` borra la muestra y la evaluación exportadas y, desde el MCP 1.14.3, **también las imágenes y el `manifiesto.json` que `preparar_facturas` dejó en `_tmp_cowork\facturas`** (con un MCP anterior quedan ahí: dilo al auditor con la ruta, que en Cowork no tienes shell en su equipo).
-`facturas.json` y las copias del sandbox los escribiste tú: bórralos con el directorio de
-trabajo. Los PDF no se copian a ningún sitio.
+`facturas.json`<!-- solo-cowork --> y las copias del sandbox<!-- /solo-cowork --> los escribiste
+tú: bórralos con el directorio de trabajo. Los PDF no se copian a ningún sitio.
 
 **No te fíes del recuento.** Desde el MCP 1.17.0 la respuesta puede traer `revisa_estos_ficheros`
 y un `aviso`: son ficheros que quedan en las carpetas donde el MCP ha exportado y que la

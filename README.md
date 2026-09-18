@@ -29,6 +29,16 @@ transcribe el sello en `token` y el cruce lo usa en vez del nombre. Qué probar:
 «tachadas» de punta a punta —que las imágenes que suben no lleven el nombre del emisor, que el papel salga
 igual que en claro (la calibración era 42/42 y 18/18), y qué tarda (unos 4 s por factura en el equipo)—; y
 otra con «tal cual», que el token en la esquina no estorbe. `fsp-cumplimiento` todavía no pregunta.
+**1.13.14 (18/09/2026): el código del proveedor sale de la población, no del diario.**
+En la prueba en frío anterior, 10 de 14 documentos subieron sin tapar el nombre del emisor. El aviso nuevo lo dijo,
+pero había que arreglarlo. La causa: la muestra trae **nueve** proveedores distintos, y al buscar su código en el
+diario quedaban **dos** —el diario los agrega en una cuenta común—. Con dos códigos para nueve proveedores, ni el
+cruce identifica nada ni el tachado puede reconocer a quién tapar. Resulta que la población ya traía el código
+correcto en su propia columna, y el plugin daba un rodeo a buscarlo fuera: ahora usa el de la población. Medido
+sobre la misma muestra: **de 2 códigos a 9**. Es la segunda vez que ese rodeo cuesta caro, así que queda como regla.
+Además, el sello del código ya no se sale de la página cuando el nombre del emisor está pegado al margen derecho
+—salía cortado y luego faltaba un nombre al desanonimizar—. Qué probar: repetir esa MUM y mirar que no aparezca
+ningún aviso de documentos sin tapar.
 **1.13.13 (18/09/2026), de la prueba en frío de la MUM: cuatro nombres subieron sin tapar.**
 El tachado tapa la cabecera y los identificadores siempre, pero la razón social solo la tapa cuando **reconoce**
 al emisor, y para reconocerlo usa los códigos de tercero que le pasa el skill. Resultó que el MCP y el skill
