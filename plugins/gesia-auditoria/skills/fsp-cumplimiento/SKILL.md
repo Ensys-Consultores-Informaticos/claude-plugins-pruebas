@@ -21,7 +21,7 @@ description: >
   expediente con cliente de muestreo vinculado (o el .cli directamente), y la
   carpeta con los documentos escaneados.
 ---
-_Versión del skill: 18/09/2026 · plugin interno 1.46.0 · pide MCP ≥ 1.17.0._
+_Versión del skill: 18/09/2026 · plugin interno 1.47.0 · pide MCP ≥ 1.17.0._
 
 
 # Prueba de cumplimiento de ForSampling (fsp-cumplimiento)

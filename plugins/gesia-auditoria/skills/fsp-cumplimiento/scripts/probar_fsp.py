@@ -142,6 +142,33 @@ def main() -> int:
     ok(roles["4"] == ROL_AUDITOR, "02 AUTORIZACION -> auditor")
     ok(roles["1"] == ROL_AUDITOR, "05 REGISTRO (oportunidad) -> auditor")
 
+    # -- el aviso de dato ilegible dice de quien es la culpa (18/09/2026)
+    import json as _json, tempfile as _tmpf
+    from verificar_contrato import _culpa_del_tachado
+    _d = Path(_tmpf.gettempdir()) / "probar_culpa"
+    (_d / "facturas").mkdir(parents=True, exist_ok=True)
+    _fj = _d / "facturas.json"
+    _fj.write_text("[]", encoding="utf-8")
+    _mj = _d / "facturas" / "manifiesto.json"
+    _mj.write_text(_json.dumps({"origen": "mcp", "documentos": [
+        {"id": "f01", "tachado": {"cabecera": 1, "datos_tapados": 0}},
+        {"id": "f02", "tachado": {"cabecera": 1, "datos_tapados": 0}}]}), encoding="utf-8")
+    _t0 = _culpa_del_tachado(str(_fj))
+    _mj.write_text(_json.dumps({"origen": "mcp", "documentos": [
+        {"id": "f01", "tachado": {"cabecera": 1, "datos_tapados": 2}}]}), encoding="utf-8")
+    _t1 = _culpa_del_tachado(str(_fj))
+    _mj.write_text(_json.dumps({"origen": "script", "documentos": []}), encoding="utf-8")
+    _t2 = _culpa_del_tachado(str(_fj))
+    ok("NO es una incidencia" in _t0 and "escaneo" in _t0,
+       "con el tachado sin tapar datos, el aviso dice que NO es del tachado ni del control")
+    ok("ATENCION" in _t1.replace("Ó", "O") and "2 línea" in _t1,
+       "y si el tachado SI tapo datos, lo dice con la cuenta")
+    ok(_t2 == "",
+       "con imagenes que no hizo el MCP no se afirma nada: no hay con que medirlo")
+    for _f in sorted((_d / "facturas").iterdir()):
+        _f.unlink()
+    (_d / "facturas").rmdir(); _fj.unlink(); _d.rmdir()
+
     # -- el asiento partido: el elemento es UNA LINEA y el documento sostiene el asiento
     # (lo adjunta el MCP a la muestra desde la propia poblacion, no del diario)
     _part = [

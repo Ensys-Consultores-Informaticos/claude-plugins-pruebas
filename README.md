@@ -29,6 +29,13 @@ transcribe el sello en `token` y el cruce lo usa en vez del nombre. Qué probar:
 «tachadas» de punta a punta —que las imágenes que suben no lleven el nombre del emisor, que el papel salga
 igual que en claro (la calibración era 42/42 y 18/18), y qué tarda (unos 4 s por factura en el equipo)—; y
 otra con «tal cual», que el token en la esquina no estorbe. `fsp-cumplimiento` todavía no pregunta.
+**1.13.11 (18/09/2026), de la prueba en frío de la 1.13.10: el aviso de dato ilegible dice de quién es la culpa.**
+Mismo MCP (1.17.0). La prueba salió bien —los dos hallazgos que antes se perdían aparecieron al pedir las páginas
+que faltaban, tal como manda la regla nueva— y dejó una duda: ¿el tachado estaba tapando alguna casilla de fecha?
+**Medido sobre esa misma carpeta: de 30 páginas, el tachado no tapa ni una fecha ni un importe**, y hay 2 páginas
+cuyo lector no ve fecha ni antes de tachar. Así que los avisos de número y fecha ilegibles ya no se quedan a medias:
+dicen que es del escaneo o del documento y **no una incidencia del control**; y si algún día el tachado sí tapara
+algo, el mismo aviso lo diría con la cuenta.
 **1.13.10 (18/09/2026): el servidor se levanta solo, y lo que antes se callaba ahora se dice.**
 Lleva dos versiones del MCP. La **1.16.0** añade `arrancar_api`: cuando el servidor API no está sirviendo,
 el MCP lo levanta él —deduce la ruta del conector del registro de Windows— en vez de pedirte que lo lances a

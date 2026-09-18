@@ -31,6 +31,31 @@ from lib_fsp import (  # noqa: E402
 )
 
 
+def _culpa_del_tachado(ruta_facturas) -> str:
+    """¿Lo tapó la anonimización, o no estaba? El MCP lo cuenta por documento en el manifiesto.
+
+    Sin esta frase, un dato ilegible por el escaneo se lee como una incidencia del control.
+    Medido el 18/09/2026 sobre 30 páginas de una carpeta real: el tachado no tapó ni una fecha ni
+    un importe, y dos páginas no traían fecha legible ni antes de tacharlas.
+    """
+    base = Path(ruta_facturas).resolve().parent
+    man = None
+    for cand in (base / "manifiesto.json", base / "facturas" / "manifiesto.json"):
+        try:
+            if cand.exists():
+                man = cargar_json(str(cand)); break
+        except Exception:
+            pass
+    if not isinstance(man, dict) or man.get("origen") != "mcp":
+        return ""
+    tapados = sum((d.get("tachado") or {}).get("datos_tapados", 0) for d in man.get("documentos", []))
+    if tapados:
+        return (f" ATENCIÓN: el tachado ha tapado {tapados} línea(s) con fecha o importe, así que parte de"
+                " esto SÍ es de la anonimización: pide esos documentos «tal cual» o dilo en el papel.")
+    return (" El tachado no ha tapado ninguna fecha ni ningún importe (lo comprueba el MCP documento a"
+            " documento), así que es del escaneo o del propio documento: NO es una incidencia del control.")
+
+
 def main() -> int:
     salida_utf8()
     p = argparse.ArgumentParser(description=__doc__)
@@ -142,9 +167,10 @@ def main() -> int:
             avisos.append(f"A06 · {len(sin_total)} documento(s) sin total legible: {', '.join(map(str, sin_total[:5]))}"
                           + ("…" if len(sin_total) > 5 else "") + ". No podrán casar por importe.")
         if sin_num:
-            avisos.append(f"A07 · {sin_num} documento(s) sin número de factura legible: casarán solo por importe y fecha.")
+            avisos.append(f"A07 · {sin_num} documento(s) sin número de factura legible: casarán solo por importe y fecha."
+                          + _culpa_del_tachado(args.facturas))
         if sin_fecha:
-            avisos.append(f"A08 · {sin_fecha} documento(s) sin fecha legible.")
+            avisos.append(f"A08 · {sin_fecha} documento(s) sin fecha legible." + _culpa_del_tachado(args.facturas))
         if len(facturas) < len(muestra):
             avisos.append(f"A09 · hay {len(muestra)} elementos y {len(facturas)} documentos: al menos "
                           f"{len(muestra) - len(facturas)} elemento(s) quedarán sin factura.")
