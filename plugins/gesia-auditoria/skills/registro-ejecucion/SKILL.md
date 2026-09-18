@@ -74,6 +74,43 @@ en el repositorio. Por eso cada punto va marcado:
 Ante la duda, hipótesis. Un registro con dos hechos sólidos vale más que uno con
 diez conjeturas presentadas como hallazgos.
 
+**4b. El síntoma se observa; la causa casi siempre se supone.** Esta es la
+distinción que no hacía la marca anterior: un punto marcado [OBSERVADO] es verdad
+en *lo que pasó*, y aun así puede colar una explicación falsa de *por qué pasó*,
+porque **la explicación viaja dentro del arreglo**, donde nadie la lee como
+conjetura.
+
+El caso que lo motivó (18/09/2026): quedaron dos exportaciones con datos del
+cliente sin borrar — síntoma real y grave— y el arreglo propuesto decía que la
+limpieza «se apoya solo en memoria de proceso», así que bastaría con darle un
+registro persistente. Medido después: ese registro **ya es un fichero que
+sobrevive al reinicio**. La causa sigue sin identificarse, y de haber seguido la
+propuesta se habría escrito código que no arreglaba nada.
+
+Cuando la duda se marca bien, el sistema funciona: en ese mismo registro, «el
+tachado puede estar tapando la casilla de la fecha» iba como [HIPÓTESIS] con qué
+haría falta para confirmarlo, se midió, salió **0 de 30 páginas**, y no se tocó
+nada. Esa es la diferencia que busca esta regla.
+
+Hay un motivo estructural, y conviene tenerlo presente: **este skill no ve el
+código.** Corre en la sesión del auditor, sin acceso al fuente del MCP ni de los
+scripts. Ve *comportamiento*. Así que **toda frase sobre cómo funciona algo por
+dentro es, por construcción, una suposición** — por muy razonable que suene y por
+muy [OBSERVADO] que esté el síntoma al que acompaña.
+
+De ahí la línea **`Causa:`**, obligatoria en cada fricción:
+
+- **`Causa (observada)`** — solo si el propio sistema la dijo: un mensaje de error
+  que la nombra, un aviso de la herramienta, un contraste que se hizo en la
+  sesión. Se cita igual que la evidencia.
+- **`Causa (supuesta)`** — todo lo demás, y no pasa nada por escribirla: es útil.
+  Lo que no vale es disfrazarla. Si hay varias explicaciones posibles, se dicen.
+
+Y el arreglo se redacta **para el síntoma**, no para la causa supuesta. «Que la
+limpieza diga lo que queda sin borrar» sobrevive a equivocarse de mecanismo;
+«que se apoye en el registro de emisión» no, y manda a alguien a escribir código
+que no arregla nada.
+
 **5. «No hubo fricciones» hay que justificarlo.** Un modelo que evalúa su propio
 trabajo tiende a decir que fue bien. Si de verdad no hay nada, se dice **qué se
 ha mirado** para poder afirmarlo.
@@ -153,7 +190,10 @@ trasladaron al usuario>
 ### Fricciones
 1. **[OBSERVADO]** <qué pasó>
    - Evidencia: <mensaje o cifra literal, sin datos del cliente>
-   - Arreglo: <SKILL.md | script | MCP | nada> — <qué habría que cambiar>
+   - Causa (supuesta | observada): <por qué crees que pasa. «Supuesta» salvo que
+     lo dijera el propio sistema: aquí no se ve el código>
+   - Arreglo: <SKILL.md | script | MCP | nada> — <qué habría que cambiar, escrito
+     para el SÍNTOMA, de modo que siga valiendo si la causa supuesta es otra>
 2. **[HIPÓTESIS]** <qué podría estar pasando>
    - Para confirmarlo haría falta: <qué medir o probar>
    - Arreglo: <dónde viviría, si se confirma>
@@ -172,7 +212,8 @@ este entorno no dejó marcas de tiempo.»>
 
 ### Para el repositorio
 <los hallazgos accionables, redactados como para pegar en mejoras-mcp.md o en
-el DISENO.md del skill: qué se cambia, dónde y por qué>
+el DISENO.md del skill: qué se cambia, dónde y por qué. Los que dependan de una
+**causa supuesta** se marcan: «medir antes de codificar», y con qué se mediría>
 ```
 
 ---
@@ -181,6 +222,8 @@ el DISENO.md del skill: qué se cambia, dónde y por qué>
 
 - **No escribe ficheros.** Ninguno, en ningún sitio.
 - **No lee el expediente ni el diario.**
+- **No ve el código** del MCP ni de los scripts, así que no afirma cómo funcionan
+  por dentro: describe lo que hacen.
 - **No juzga si el papel de trabajo está bien.** Si las cifras cuadran lo dice
   el auditor, que es quien firma.
 - **No arregla nada.** Propone; el arreglo se hace en el repositorio del plugin.
@@ -194,6 +237,8 @@ el DISENO.md del skill: qué se cambia, dónde y por qué>
 |---|---|
 | No se ha ejecutado ningún skill en la sesión | **para** y lo dice: no hay nada que registrar. No se inventa una ejecución |
 | La conversación viene resumida y falta detalle | sigue, y marca como hipótesis lo que no puede citar con evidencia |
+| Sabes qué pasó pero no por qué | se escribe igual: `Causa (supuesta)`, y el arreglo redactado para el síntoma. No se calla la sospecha ni se disfraza de hecho |
+| La explicación exige saber cómo está hecho algo por dentro | **siempre** `Causa (supuesta)`: aquí no se ve el código, por bien que encaje la explicación |
 | No consta la versión del skill | se dice «no consta» — nunca se supone |
 | El entorno deja marcas de tiempo (Cowork) | se usan: son medición, no estimación. Se dice de dónde salen |
 | El entorno no deja marcas de tiempo | el bloque dice «no se midió». **Nunca un tiempo a ojo** |

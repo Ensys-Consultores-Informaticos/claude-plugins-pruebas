@@ -29,6 +29,15 @@ transcribe el sello en `token` y el cruce lo usa en vez del nombre. Qué probar:
 «tachadas» de punta a punta —que las imágenes que suben no lleven el nombre del emisor, que el papel salga
 igual que en claro (la calibración era 42/42 y 18/18), y qué tarda (unos 4 s por factura en el equipo)—; y
 otra con «tal cual», que el token en la esquina no estorbe. `fsp-cumplimiento` todavía no pregunta.
+**1.13.12 (18/09/2026): el registro de ejecución separa el síntoma de su explicación.**
+Mismo MCP (1.17.0). `registro-ejecucion` marcaba [OBSERVADO] o [HIPÓTESIS] cada fricción, y eso funcionaba
+para **lo que pasó**. Pero la explicación de **por qué** pasa viajaba dentro del arreglo propuesto, donde nadie
+la lee como conjetura: en un registro reciente se propuso arreglar una limpieza dándole un registro persistente
+«porque se apoya solo en memoria», y resultó que ese registro ya era un fichero que sobrevive al reinicio. El
+síntoma era real y grave; la explicación, no. Ahora cada fricción lleva una línea **`Causa (supuesta | observada)`**
+—supuesta por defecto, porque el skill ve comportamiento y no código— y el arreglo se redacta **para el síntoma**,
+de modo que siga valiendo si la causa era otra. Qué probar: pedir un registro después de cualquier ejecución y
+mirar si la línea de causa distingue lo que sabe de lo que supone.
 **1.13.11 (18/09/2026), de la prueba en frío de la 1.13.10: el aviso de dato ilegible dice de quién es la culpa.**
 Mismo MCP (1.17.0). La prueba salió bien —los dos hallazgos que antes se perdían aparecieron al pedir las páginas
 que faltaban, tal como manda la regla nueva— y dejó una duda: ¿el tachado estaba tapando alguna casilla de fecha?
