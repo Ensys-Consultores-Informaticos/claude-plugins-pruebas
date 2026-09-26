@@ -100,6 +100,13 @@ TRABAJO="$(pwd)/trabajo" && mkdir -p "$TRABAJO"
 Los scripts no tocan el `.gs3`: leen lo que `exportar_consulta` haya dejado en disco. El
 expediente lleva contraseña y **solo lo abre el servidor API**.
 
+**Si no puedes ejecutar los scripts en el equipo del auditor, para y díselo.** No muevas las
+exportaciones a una carpeta desde la que se suban a otro sitio: `cuentas.json` lleva el nombre
+de todas las cuentas del plan, y las de los grupos 40, 41 y 43 se llaman como el proveedor o
+el cliente. Ese fichero está en `<TEMP>` precisamente para que no salga de ahí. Dile al
+auditor qué ha fallado y que lo reporte con «cómo ha ido»; es un caso que hay que medir, no
+rodear.
+
 ---
 
 ## Secuencia

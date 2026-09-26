@@ -357,32 +357,51 @@ def _hoja_propuestas(wb: Workbook, props: list, cliente: str, ejercicio: str) ->
     return descuadres, ya_puestos
 
 
-def _hoja_catalogo(wb: Workbook, grupos: dict, con_regla: set, cliente: str, ejercicio: str) -> None:
+def total_propuesto(p: dict) -> float:
+    """Lo que suma la propuesta de una plantilla.
+
+    Redondeando apunte a apunte, igual que la hoja Propuestas, para que las dos hojas
+    digan el mismo numero y no se separen por un centimo."""
+    t = 0.0
+    for _, _, cobro, _ in p["lineas"]:
+        t = redondear(t + cobro)
+    return t
+
+
+def _hoja_catalogo(wb: Workbook, grupos: dict, propuesto: dict, cliente: str, ejercicio: str) -> None:
     ws = wb.create_sheet("Catalogo")
     fila = _titulo(ws, cliente, ejercicio,
                    "TODAS las plantillas de ajuste que tiene este expediente, con el criterio "
-                   "que trae cada una. Las que no llevan propuesta las rellena el auditor.")
+                   "que trae cada una. Las que no llevan propuesta las rellena el auditor. "
+                   "Son DOS importes distintos: «ya aprobado en Gesia» es lo que está registrado "
+                   "hoy en el expediente —0,00 mientras no se apruebe nada—, y «propuesto» es lo "
+                   "que propone este papel, desglosado en la hoja Propuestas.")
     _cabecera(ws, fila,
-              ["Nº", "Descripción", "Aprobado", "Apuntes", "Importe puesto", "¿Propuesta?", "Criterio de la plantilla"],
-              [6, 44, 11, 9, 16, 13, 96])
+              ["Nº", "Descripción", "Aprobado", "Apuntes", "Importe ya aprobado en Gesia",
+               "Importe propuesto", "¿Propuesta?", "Criterio de la plantilla"],
+              [6, 44, 11, 9, 20, 17, 13, 96])
     fila += 1
     for n, a in sorted(grupos.items(), key=lambda kv: int(kv[0]) if kv[0].isdigit() else 0):
         puesto = redondear(sum(a_float(p.get("Origen")) for p in a["apuntes"]))
         usada = a["aprobado"] or abs(puesto) > TOLERANCIA
-        fuente = NORMAL if usada or n in con_regla else APAGADO
+        fuente = NORMAL if usada or n in propuesto else APAGADO
         ws.cell(row=fila, column=1, value=n).font = fuente
         ws.cell(row=fila, column=2, value=a["desc"]).font = fuente
         ws.cell(row=fila, column=3, value="SÍ" if a["aprobado"] else "no").font = fuente
         ws.cell(row=fila, column=4, value=len(a["apuntes"])).font = fuente
         _importe(ws, fila, 5, puesto, fuente)
-        ws.cell(row=fila, column=6, value="sí" if n in con_regla else "—").font = fuente
-        c = ws.cell(row=fila, column=7, value=a["criterio"])
+        # En blanco, no 0,00, cuando no hay propuesta: un cero en esta columna es justo la
+        # lectura que hizo perder el tiempo al auditor el 26/09/2026.
+        if n in propuesto:
+            _importe(ws, fila, 6, propuesto[n], fuente)
+        ws.cell(row=fila, column=7, value="sí" if n in propuesto else "—").font = fuente
+        c = ws.cell(row=fila, column=8, value=a["criterio"])
         c.font = fuente
         c.alignment = Alignment(wrap_text=True, vertical="top")
-        if n in con_regla:
-            ws.cell(row=fila, column=6).fill = TOTAL_FILL
+        if n in propuesto:
+            ws.cell(row=fila, column=7).fill = TOTAL_FILL
         elif not usada:
-            for j in range(1, 8):
+            for j in range(1, 9):
                 ws.cell(row=fila, column=j).fill = GRIS
         fila += 1
 
@@ -440,12 +459,13 @@ def main() -> int:
     grupos = agrupar(catalogo)
     s = Saldos(cuentas)
     props = proponer(grupos, s)
-    con_regla = {p["numero"] for p in props}
+    propuesto = {p["numero"]: total_propuesto(p) for p in props}
+    con_regla = set(propuesto)
 
     wb = Workbook()
     wb.remove(wb.active)
     descuadres, ya_puestos = _hoja_propuestas(wb, props, a.cliente, a.ejercicio)
-    _hoja_catalogo(wb, grupos, con_regla, a.cliente, a.ejercicio)
+    _hoja_catalogo(wb, grupos, propuesto, a.cliente, a.ejercicio)
 
     comprobaciones = []
     comprobaciones.append((

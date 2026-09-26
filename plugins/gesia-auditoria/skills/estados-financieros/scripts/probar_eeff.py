@@ -34,8 +34,42 @@ from lib_eeff import (
 )
 from generar_ecpn import _pn
 from generar_efe import ESTRUCTURALES, _agrupar, _fecha, _neto, _totales
-from proponer_efe import PREFIJO_IA, Saldos, agrupar, proponer, regla_de
+from proponer_efe import (
+    PREFIJO_IA,
+    Saldos,
+    _hoja_catalogo,
+    agrupar,
+    proponer,
+    regla_de,
+    total_propuesto,
+)
 from generar_papel import _es_rotulo_pyg, _presentar_balance, _presentar_pyg, _sangria
+
+
+def _catalogo_de_prueba():
+    """La hoja Catalogo de un expediente con dos plantillas: una con propuesta y otra sin."""
+    from openpyxl import Workbook
+
+    catalogo = [
+        {"NumeroAsientoOA": "3", "Descripcion": "Amortizacion", "Aprobado": "False",
+         "Observaciones": "", "ApunteOA": str(i), "Cuenta": cta, "Contrapartida": con,
+         "Concepto": "x", "Origen": "0", "Aplicacion": "0"}
+        for i, (cta, con) in enumerate(
+            [("C68", "280"), ("280", "C68"), ("C68", "281"), ("281", "C68"),
+             ("C68", "282"), ("282", "C68")], start=1)
+    ] + [
+        {"NumeroAsientoOA": "9", "Descripcion": "Lo que rellena el auditor", "Aprobado": "False",
+         "Observaciones": "", "ApunteOA": "9", "Cuenta": "570", "Contrapartida": "129",
+         "Concepto": "x", "Origen": "0", "Aplicacion": "0"},
+    ]
+    grupos = agrupar(catalogo)
+    props = proponer(grupos, Saldos([{"Cuenta": "680", "SaldoAuditoria": "414,32"},
+                                     {"Cuenta": "681", "SaldoAuditoria": "103.896,35"}]))
+    wb = Workbook()
+    wb.remove(wb.active)
+    _hoja_catalogo(wb, grupos, {p["numero"]: total_propuesto(p) for p in props},
+                   "CLIENTE DE PRUEBA", "2025")
+    return wb["Catalogo"]
 
 
 def _linea(codigo, estado, ap, clase, asignable, s1=0.0, s2=0.0, **extra):
@@ -288,6 +322,19 @@ def main() -> int:
          (lambda t: "no es" in t and "todav" in t and "verde de las dem" in t)(
              io.open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "generar_efe.py"),
                      encoding="utf-8").read())),
+
+        ("CATALOGO · el importe propuesto se ve en la hoja Catalogo, al lado del ya aprobado y "
+         "con otro nombre. Los dos compartian la columna «Importe puesto», que suma lo YA "
+         "REGISTRADO en el expediente -0,00 mientras nada esta aprobado-, y se leyo como que la "
+         "propuesta venia vacia aunque la hoja Propuestas traia las cifras (26/09/2026)",
+         (lambda ws: [ws.cell(row=5, column=c).value for c in (5, 6)]
+          == ["Importe ya aprobado en Gesia", "Importe propuesto"]
+          and ws.cell(row=6, column=5).value == 0.0
+          and ws.cell(row=6, column=6).value == 104310.67)(_catalogo_de_prueba())),
+
+        ("CATALOGO · y la plantilla SIN propuesta deja la celda en blanco, no a 0,00: un cero "
+         "ahi es justo la lectura que se quiere evitar",
+         _catalogo_de_prueba().cell(row=7, column=6).value is None),
 
         ("REDONDEO CONTABLE: el medio centimo sube, y no se redondea al par como hace round()",
          saldo({"SaldoAuditoria1": "1.000,555"}, 1) == 1000.56
